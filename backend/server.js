@@ -211,6 +211,108 @@ app.post('/auth/change-password', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+// ========== MARCA (BRANDING) ==========
+const BRANDING_CONFIG_FILE = path.join(__dirname, 'brandingConfig.json');
+const BRANDING_DIR = path.join(__dirname, 'branding');
+
+const readBrandingConfig = () => {
+  try {
+    if (fs.existsSync(BRANDING_CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(BRANDING_CONFIG_FILE, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error leyendo brandingConfig:', error);
+  }
+  return { title: 'Control de Préstamos', logoFile: null };
+};
+
+const saveBrandingConfig = (config) => {
+  fs.writeFileSync(BRANDING_CONFIG_FILE, JSON.stringify(config, null, 2));
+};
+
+const LOGO_MIME_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' };
+
+const logoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(BRANDING_DIR)) fs.mkdirSync(BRANDING_DIR, { recursive: true });
+    cb(null, BRANDING_DIR);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `logo${LOGO_MIME_EXT[file.mimetype]}`);
+  }
+});
+
+const uploadLogo = multer({
+  storage: logoStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (LOGO_MIME_EXT[file.mimetype]) cb(null, true);
+    else cb(new Error('Formato no permitido. Usa PNG, JPG o WebP.'));
+  }
+});
+
+app.get('/branding', (req, res) => {
+  const config = readBrandingConfig();
+  let logoVersion = null;
+  if (config.logoFile) {
+    const logoPath = path.join(BRANDING_DIR, config.logoFile);
+    if (fs.existsSync(logoPath)) logoVersion = fs.statSync(logoPath).mtimeMs;
+  }
+  res.json({ title: config.title, hasLogo: logoVersion !== null, logoVersion });
+});
+
+app.get('/branding/logo', (req, res) => {
+  const config = readBrandingConfig();
+  const logoPath = config.logoFile && path.join(BRANDING_DIR, config.logoFile);
+  if (logoPath && fs.existsSync(logoPath)) {
+    res.sendFile(logoPath);
+  } else {
+    res.status(404).json({ error: 'No hay logo configurado' });
+  }
+});
+
+app.put('/branding', requireAdmin, (req, res) => {
+  const { title } = req.body || {};
+  if (typeof title !== 'string' || title.trim() === '' || title.trim().length > 80) {
+    return res.status(400).json({ error: 'El título es obligatorio y debe tener máximo 80 caracteres' });
+  }
+  const config = readBrandingConfig();
+  config.title = title.trim();
+  saveBrandingConfig(config);
+  res.json(config);
+});
+
+app.post('/branding/logo', requireAdmin, (req, res) => {
+  uploadLogo.single('logo')(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE' ? 'El logo no puede superar 2 MB' : err.message;
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se recibió ningún archivo' });
+    }
+    const config = readBrandingConfig();
+    if (config.logoFile && config.logoFile !== req.file.filename) {
+      const oldPath = path.join(BRANDING_DIR, config.logoFile);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    config.logoFile = req.file.filename;
+    saveBrandingConfig(config);
+    res.json({ success: true });
+  });
+});
+
+app.delete('/branding/logo', requireAdmin, (req, res) => {
+  const config = readBrandingConfig();
+  if (config.logoFile) {
+    const logoPath = path.join(BRANDING_DIR, config.logoFile);
+    if (fs.existsSync(logoPath)) fs.unlinkSync(logoPath);
+    config.logoFile = null;
+    saveBrandingConfig(config);
+  }
+  res.json({ success: true });
+});
+
 // Configuración del transporte de correo
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
   console.warn('EMAIL_USER / EMAIL_PASS no están configurados en credenciales.env. El envío de reportes por correo fallará.');
