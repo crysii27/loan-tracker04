@@ -813,28 +813,30 @@ const filteredLoans = loans.filter(loan => {
 
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-8">
           <div className="space-y-4 mb-6">
-		  <div className="flex items-center gap-3">
-		    <FiSearch className="text-gray-500 text-lg" />
-		    <input
-		      type="text"
-		      placeholder="Buscar por equipo, serial o partner..."
-		      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-		      value={searchTerm}
-		      onChange={(e) => setSearchTerm(e.target.value)}
-		  activeTab === 'activos' && (
-		    <div className="flex items-center gap-3">
-		      <label className="text-sm font-medium text-gray-700">Ordenar por:</label>
-		      <select
-			value={sortBy}
-			onChange={(e) => setSortBy(e.target.value)}
-			className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-		      >
-			<option value="creation">Más recientes primero</option>
-			<option value="overdue">Mayor atraso primero</option>
-		      </select>
-		    </div>
-		  )}
-		</div>
+            <div className="flex items-center gap-3">
+              <FiSearch className="text-gray-500 text-lg" />
+              <input
+                type="text"
+                placeholder="Buscar por equipo, serial o partner..."
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            {activeTab === 'activos' && (
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700">Ordenar por:</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="creation">Más recientes primero</option>
+                  <option value="overdue">Mayor atraso primero</option>
+                </select>
+              </div>
+            )}
+          </div>
         
         
           <div className="flex gap-4 border-b-2 border-gray-200 mb-6">
@@ -1206,7 +1208,4 @@ const filteredLoans = loans.filter(loan => {
   );
 }
 
-export default App;  />
-  </div>
-  
-  {
+export default App;
