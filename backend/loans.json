@@ -1,0 +1,261 @@
+[
+  {
+    "id": 1,
+    "client": "Camara de Comercio de Bogotá",
+    "partner": "N/A",
+    "responsible": "Jaime Diaz",
+    "loanDate": "2025-06-02",
+    "returnDate": "2026-02-02",
+    "comments": "",
+    "document": "Remision Equipos_Aruba vf-firmado.pdf",
+    "devices": [
+      {
+        "equipmentName": "6200F-24G",
+        "equipmentSerial": "SG39LN31CN"
+      },
+      {
+        "equipmentName": "GW-9004",
+        "equipmentSerial": "CNKFKSP040"
+      },
+      {
+        "equipmentName": "GW-SD_WAN",
+        "equipmentSerial": "001BBC20CB28"
+      },
+      {
+        "equipmentName": "UXI G6EC",
+        "equipmentSerial": "CNRKLPM0DX"
+      },
+      {
+        "equipmentName": "3810M",
+        "equipmentSerial": "SG83GYZ0BY"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ6YJ"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ6Y2"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ71J"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ70P"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ6XD"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ71L"
+      }
+    ],
+    "status": "atrasado"
+  },
+  {
+    "id": 2,
+    "client": "Sociedad Portuaria",
+    "partner": "SED International",
+    "responsible": "Maria Alejandra Prieto",
+    "loanDate": "2025-09-05",
+    "returnDate": "2025-10-23",
+    "comments": "Se presto con power Injector",
+    "document": "Remision Equipos_SED_565 -fdo.pdf",
+    "devices": [
+      {
+        "equipmentName": "AP-565",
+        "equipmentSerial": "CNLGKWC0Q6"
+      }
+    ],
+    "status": "atrasado"
+  },
+  {
+    "id": 3,
+    "client": "SURA",
+    "partner": "ARUS",
+    "responsible": "Claudia Ortiz",
+    "loanDate": "2025-07-31",
+    "returnDate": "2025-11-28",
+    "comments": "",
+    "document": "Remision Equipos_Arus-Sura 1_1753383424-f-f-f (1).pdf",
+    "devices": [
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ71G"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ6ZX"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ6Y4"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ70W"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ6Y3"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ6XX"
+      },
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "PHS9KYJ6XM"
+      }
+    ],
+    "status": "atrasado"
+  },
+  {
+    "id": 4,
+    "client": "America Movil Perú",
+    "partner": "KELIOS",
+    "responsible": "Edmundo Carrion",
+    "loanDate": "2025-09-25",
+    "returnDate": "2025-11-28",
+    "comments": "",
+    "document": "Remision Equipos_AP755_BOG.pdf",
+    "devices": [
+      {
+        "equipmentName": "AP-755",
+        "equipmentSerial": "988F00C1F51D"
+      }
+    ],
+    "status": "devuelto"
+  },
+  {
+    "id": 5,
+    "client": "grupo HADA",
+    "partner": "AXIS IT",
+    "responsible": "Claudia Ortiz",
+    "loanDate": "2025-09-29",
+    "returnDate": "2025-10-29",
+    "comments": "",
+    "document": "Remision Equipos_UXI_AXIS_grupoHADA.pdf",
+    "devices": [
+      {
+        "equipmentName": "UXI G6EC",
+        "equipmentSerial": "CNRKLPM04B"
+      }
+    ],
+    "status": "devuelto"
+  },
+  {
+    "id": 6,
+    "client": "Ricoh",
+    "partner": "SED International",
+    "responsible": "Maria Alejandra Prieto ",
+    "loanDate": "2025-09-29",
+    "returnDate": "2025-10-29",
+    "comments": "",
+    "document": "Remision Equipos_UXI_SED_Hospital Universitario de Santander Fdo.pdf",
+    "devices": [
+      {
+        "equipmentName": "UXI G6EC",
+        "equipmentSerial": "CNRKLPM0DN"
+      }
+    ],
+    "status": "devuelto"
+  },
+  {
+    "id": 7,
+    "client": "Hospital Universitario de Santander ",
+    "partner": "SED International",
+    "responsible": "Jaime Diaz",
+    "loanDate": "2025-09-29",
+    "returnDate": "2025-10-29",
+    "comments": "",
+    "document": "META-TELCO Comodato-FIN-BBARRERA-LT.pdf",
+    "devices": [
+      {
+        "equipmentName": "AP-535",
+        "equipmentSerial": "CNHCK9W090"
+      },
+      {
+        "equipmentName": "AP-555",
+        "equipmentSerial": "CNHYK9Y009"
+      }
+    ],
+    "status": "devuelto"
+  },
+  {
+    "id": 8,
+    "client": "Philips ",
+    "partner": "N/A",
+    "responsible": "Edgar Cardenas ",
+    "loanDate": "2025-10-01",
+    "returnDate": "2025-11-03",
+    "comments": "",
+    "document": null,
+    "devices": [
+      {
+        "equipmentName": "10G SFP+ LC SR, part  number J9150D",
+        "equipmentSerial": "CN10KJVHM"
+      },
+      {
+        "equipmentName": "10G SFP+ LC SR, part  number J9150D",
+        "equipmentSerial": "CN25KJVD6B"
+      }
+    ],
+    "status": "devuelto"
+  },
+  {
+    "id": 9,
+    "client": "Avianca ",
+    "partner": "El ORBE",
+    "responsible": "Juan Beltran",
+    "loanDate": "2025-10-15",
+    "returnDate": "2025-11-17",
+    "comments": "Se presta con fuente de poder y cable.",
+    "document": null,
+    "devices": [
+      {
+        "equipmentName": "Cellular Bridge BR-150",
+        "equipmentSerial": "VNSFM6B04D"
+      }
+    ],
+    "status": "devuelto"
+  },
+  {
+    "id": 10,
+    "client": "Seguros Bolivar",
+    "partner": "N/A",
+    "responsible": "Juan Beltran",
+    "loanDate": "2025-10-29",
+    "returnDate": "2025-12-10",
+    "comments": "",
+    "document": null,
+    "devices": [
+      {
+        "equipmentName": "AP-635",
+        "equipmentSerial": "\t946424CB1ADB"
+      }
+    ],
+    "status": "devuelto"
+  },
+  {
+    "id": 11,
+    "client": "Universidad Santiago de Cali",
+    "partner": "Soluciones Tecnología y Servicios ",
+    "responsible": "Wendy Niguetti",
+    "loanDate": "2025-11-07",
+    "returnDate": "2026-02-13",
+    "comments": "Se prestó a demas un power injector",
+    "document": "Remision Equipos_STS_UniSntgodeCali.pdf",
+    "devices": [
+      {
+        "equipmentName": "UXI G6EC",
+        "equipmentSerial": "CNRKLPM0CC"
+      }
+    ],
+    "status": "devuelto"
+  }
+]

@@ -1,0 +1,7 @@
+node_modules/
+frontend/build/
+backend/uploads/
+backend/credenciales.env
+backend/.env
+*.log
+.DS_Store
