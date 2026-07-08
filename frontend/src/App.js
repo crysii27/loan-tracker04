@@ -1,8 +1,62 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiMessageSquare, FiSearch, FiFileText, FiArchive, FiAlertCircle, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 
 // URL del servidor - configurable vía REACT_APP_API_URL en frontend/.env
 const API_URL = process.env.REACT_APP_API_URL || 'http://172.24.100.115:5000';
+
+// Sistema de diseño: clases reutilizables (paleta y tipografía en tailwind.config.js)
+const UI = {
+  btnPrimary: 'inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold px-5 py-2.5 bg-circuit text-white transition-colors duration-150 hover:bg-circuit-dark focus:outline-none focus:ring-2 focus:ring-circuit focus:ring-offset-2 focus:ring-offset-paper disabled:opacity-50 disabled:cursor-not-allowed',
+  btnSecondary: 'inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold px-5 py-2.5 bg-surface text-ink border border-line transition-colors duration-150 hover:bg-paper focus:outline-none focus:ring-2 focus:ring-circuit focus:ring-offset-2 focus:ring-offset-paper',
+  btnDangerOutline: 'inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold px-5 py-2.5 bg-surface text-signal-red border border-signal-red-line transition-colors duration-150 hover:bg-signal-red hover:text-white hover:border-signal-red focus:outline-none focus:ring-2 focus:ring-signal-red focus:ring-offset-2 focus:ring-offset-paper',
+  btnGhost: 'inline-flex items-center gap-1.5 text-sm font-medium text-circuit transition-colors duration-150 hover:text-circuit-dark',
+  btnGhostDanger: 'inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors duration-150 hover:text-signal-red',
+  iconGhost: 'text-ink-muted transition-colors duration-150 hover:text-circuit',
+  iconGhostDanger: 'text-ink-muted transition-colors duration-150 hover:text-signal-red',
+  input: 'w-full px-3.5 py-2.5 bg-surface border border-line rounded-lg text-sm text-ink placeholder-ink-muted transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-circuit focus:border-circuit',
+  label: 'block text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5',
+  card: 'bg-surface rounded-xl border border-line shadow-card',
+  panel: 'bg-surface rounded-xl border border-line shadow-card p-6 mb-8',
+};
+
+const STATUS_META = {
+  activo: { label: 'Activo', dot: 'bg-signal-green', ring: 'shadow-led-green', text: 'text-signal-green', soft: 'bg-signal-green-soft', line: 'border-signal-green-line' },
+  atrasado: { label: 'Atrasado', dot: 'bg-signal-amber', ring: 'shadow-led-amber', text: 'text-signal-amber', soft: 'bg-signal-amber-soft', line: 'border-signal-amber-line' },
+  devuelto: { label: 'Devuelto', dot: 'bg-signal-slate', ring: 'shadow-led-slate', text: 'text-signal-slate', soft: 'bg-signal-slate-soft', line: 'border-signal-slate-line' },
+};
+
+const getStatusMeta = (status) => STATUS_META[status] || STATUS_META.devuelto;
+
+// Insignia de solo lectura: el estado de un préstamo, como el LED de un puerto de red
+const StatusBadge = ({ status }) => {
+  const meta = getStatusMeta(status);
+  return (
+    <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border ${meta.soft} ${meta.line}`}>
+      <span className={`w-2 h-2 rounded-full ${meta.dot} ${meta.ring}`} />
+      <span className={`text-xs font-semibold uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
+    </span>
+  );
+};
+
+// Selector de estado interactivo: mismo lenguaje visual del LED, pero editable
+const StatusSelect = ({ status, onChange }) => {
+  const meta = getStatusMeta(status);
+  return (
+    <div className="relative inline-flex items-center">
+      <span className={`absolute left-3 w-2 h-2 rounded-full pointer-events-none ${meta.dot} ${meta.ring}`} />
+      <select
+        value={status}
+        onChange={onChange}
+        className={`appearance-none pl-7 pr-7 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide border cursor-pointer ${meta.soft} ${meta.text} ${meta.line} focus:outline-none focus:ring-2 focus:ring-circuit`}
+      >
+        <option value="activo">Activo</option>
+        <option value="atrasado">Atrasado</option>
+        <option value="devuelto">Devuelto</option>
+      </select>
+      <FiChevronDown className={`pointer-events-none absolute right-2 text-xs ${meta.text}`} />
+    </div>
+  );
+};
 
 function App() {
   // Estados
@@ -39,7 +93,7 @@ function App() {
     partner: '',
     client: '',
   });
-  
+
   const [sortBy, setSortBy] = useState('creation');
 
   // Función para cargar préstamos desde el servidor
@@ -61,27 +115,27 @@ function App() {
   useEffect(() => {
     fetchLoans();
   }, []);
-  
+
   // Cargar configuración de reportes al inicio
-useEffect(() => {
-  const fetchReportConfig = async () => {
-    try {
-      const response = await fetch(`${API_URL}/report-config`);
-      const config = await response.json();
-      if (config && config.isScheduled) {
-        setReportConfig({
-          email: config.email,
-          frequency: config.frequency,
-          isScheduled: config.isScheduled
-        });
+  useEffect(() => {
+    const fetchReportConfig = async () => {
+      try {
+        const response = await fetch(`${API_URL}/report-config`);
+        const config = await response.json();
+        if (config && config.isScheduled) {
+          setReportConfig({
+            email: config.email,
+            frequency: config.frequency,
+            isScheduled: config.isScheduled
+          });
+        }
+      } catch (error) {
+        console.error('Error cargando configuración de reportes:', error);
       }
-    } catch (error) {
-      console.error('Error cargando configuración de reportes:', error);
-    }
-  };
-  fetchReportConfig();
-}, []);
-  
+    };
+    fetchReportConfig();
+  }, []);
+
 
   // Actualizar préstamos cada 30 segundos para sincronización
   useEffect(() => {
@@ -189,7 +243,7 @@ useEffect(() => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       if (editingId) {
         const response = await fetch(`${API_URL}/loans/${editingId}`, {
@@ -265,7 +319,7 @@ useEffect(() => {
         });
 
         if (!response.ok) throw new Error('Error al eliminar');
-        
+
         await fetchLoans();
         setExpandedLoanId(null);
         alert('Préstamo eliminado correctamente');
@@ -291,7 +345,7 @@ useEffect(() => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...loan, document: null })
           });
-          
+
           await fetchLoans();
           alert('Documento eliminado correctamente');
         } else {
@@ -349,27 +403,27 @@ useEffect(() => {
     }
 
     try {
-	const response = await fetch(`${API_URL}/schedule-report`, {
-	  method: 'POST',
-	  headers: { 'Content-Type': 'application/json' },
-	  body: JSON.stringify({
-	    email: reportConfig.email,
-	    frequency: reportConfig.frequency
-	  }),
-	});
+      const response = await fetch(`${API_URL}/schedule-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: reportConfig.email,
+          frequency: reportConfig.frequency
+        }),
+      });
 
-	const data = await response.json();
-	if (response.ok) {
-	  setReportConfig({ 
-	    ...reportConfig, 
-	    isScheduled: true 
-	  });
-	  alert(data.message + '\n\nLa configuración se mantendrá activa incluso si recargas la página.');
-	} else {
-	  console.error('Error del servidor:', data.error);
-	  alert(`Error al programar el reporte: ${data.error}`);
-	}
-	    } catch (error) {
+      const data = await response.json();
+      if (response.ok) {
+        setReportConfig({
+          ...reportConfig,
+          isScheduled: true
+        });
+        alert(data.message + '\n\nLa configuración se mantendrá activa incluso si recargas la página.');
+      } else {
+        console.error('Error del servidor:', data.error);
+        alert(`Error al programar el reporte: ${data.error}`);
+      }
+    } catch (error) {
       console.error('Error en la conexión:', error);
       alert('Error en la conexión con el servidor. Verifica que el backend esté en ejecución.');
     }
@@ -511,32 +565,31 @@ useEffect(() => {
     }
   };
 
-const filteredLoans = loans.filter(loan => {
-  const matchesStatus =
-    activeTab === 'activos' ? loan.status !== 'devuelto' :
-    activeTab === 'archivo' ? loan.status === 'devuelto' :
-    true;
-  const matchesSearch =
-    (loan.partner || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (loan.responsible || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (loan.client || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (loan.devices && loan.devices.some(device =>
-      (device.equipmentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (device.equipmentSerial || '').toLowerCase().includes(searchTerm.toLowerCase())
-    ));
-  return matchesStatus && matchesSearch;
-}).sort((a, b) => {
-  // Ordenar según la opción seleccionada
-  if (sortBy === 'creation') {
-    return b.id - a.id; // Más recientes primero
-  } else if (sortBy === 'overdue') {
-    const overdueDaysA = a.status === 'atrasado' ? calculateOverdueDays(a.returnDate) : 0;
-    const overdueDaysB = b.status === 'atrasado' ? calculateOverdueDays(b.returnDate) : 0;
-    return overdueDaysB - overdueDaysA; // Mayor atraso primero
-  }
-  return 0;
-});
-
+  const filteredLoans = loans.filter(loan => {
+    const matchesStatus =
+      activeTab === 'activos' ? loan.status !== 'devuelto' :
+      activeTab === 'archivo' ? loan.status === 'devuelto' :
+      true;
+    const matchesSearch =
+      (loan.partner || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (loan.responsible || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (loan.client || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (loan.devices && loan.devices.some(device =>
+        (device.equipmentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (device.equipmentSerial || '').toLowerCase().includes(searchTerm.toLowerCase())
+      ));
+    return matchesStatus && matchesSearch;
+  }).sort((a, b) => {
+    // Ordenar según la opción seleccionada
+    if (sortBy === 'creation') {
+      return b.id - a.id; // Más recientes primero
+    } else if (sortBy === 'overdue') {
+      const overdueDaysA = a.status === 'atrasado' ? calculateOverdueDays(a.returnDate) : 0;
+      const overdueDaysB = b.status === 'atrasado' ? calculateOverdueDays(b.returnDate) : 0;
+      return overdueDaysB - overdueDaysA; // Mayor atraso primero
+    }
+    return 0;
+  });
 
   const stats = {
     total: loans.length,
@@ -547,22 +600,24 @@ const filteredLoans = loans.filter(loan => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-paper flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando préstamos...</p>
+          <div className="w-10 h-10 border-2 border-line border-t-circuit rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-sm text-ink-muted font-medium">Cargando préstamos…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
-          <div className="mb-6 md:mb-0">
-            <h1 className="text-3xl font-bold text-gray-800">Control de Préstamos Showroom</h1>
-            <p className="text-gray-600">Gestiona y controla todos los préstamos de manera eficiente</p>
+    <div className="min-h-screen bg-paper">
+      <div className="h-1 bg-circuit" />
+      <div className="max-w-6xl mx-auto p-4 md:p-8">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-8 gap-6">
+          <div>
+            <p className="font-mono text-xs font-medium text-ink-muted uppercase tracking-widest mb-2">Showroom · Gestión de Activos</p>
+            <h1 className="font-display text-3xl font-bold text-ink tracking-tight">Control de Préstamos</h1>
+            <p className="text-sm text-ink-muted mt-1">Gestiona y controla todos los préstamos de equipos en un solo lugar</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
             <button
@@ -580,85 +635,85 @@ const filteredLoans = loans.filter(loan => {
                 });
                 setShowForm(true);
               }}
-              className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg transition duration-200"
+              className={UI.btnPrimary}
             >
-              <FiPlus className="text-lg" /> Nuevo Préstamo
+              <FiPlus className="text-base" /> Nuevo Préstamo
             </button>
             <button
               onClick={() => setShowReportConfig(true)}
-              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-5 py-2.5 rounded-lg transition duration-200"
+              className={UI.btnSecondary}
             >
-              <FiSettings className="text-lg" /> Configurar Reportes
+              <FiSettings className="text-base" /> Configurar Reportes
             </button>
           </div>
         </div>
 
         {showForm && (
-          <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-8">
-            <h2 className="text-2xl font-semibold mb-6">{editingId ? 'Editar Préstamo' : 'Nuevo Préstamo'}</h2>
+          <div className={UI.panel}>
+            <h2 className="font-display text-xl font-bold text-ink mb-6">{editingId ? 'Editar Préstamo' : 'Nuevo Préstamo'}</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                  <label className={UI.label}>Cliente</label>
                   <input
                     type="text"
                     name="client"
                     value={formData.client}
                     onChange={handleInputChange}
                     placeholder="Nombre del cliente"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={UI.input}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Partner</label>
+                  <label className={UI.label}>Partner</label>
                   <input
                     type="text"
                     name="partner"
                     value={formData.partner}
                     onChange={handleInputChange}
                     placeholder="Nombre del partner"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={UI.input}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Responsable</label>
+                  <label className={UI.label}>Responsable</label>
                   <input
                     type="text"
                     name="responsible"
                     value={formData.responsible}
                     onChange={handleInputChange}
                     placeholder="Nombre del responsable"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={UI.input}
                     required
                   />
                 </div>
                 <div></div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de préstamo</label>
+                <div>
+                  <label className={UI.label}>Fecha de préstamo</label>
                   <input
                     type="date"
                     name="loanDate"
                     value={formData.loanDate}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={UI.input}
                     required
                   />
                 </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha prevista de devolución</label>
+                <div>
+                  <label className={UI.label}>Fecha prevista de devolución</label>
                   <input
                     type="date"
                     name="returnDate"
                     value={formData.returnDate}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={UI.input}
                     required
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Dispositivos</label>
+                  <label className={UI.label}>Dispositivos</label>
                   {formData.devices.map((device, index) => (
                     <div key={index} className="flex gap-3 mb-3">
                       <input
@@ -667,7 +722,7 @@ const filteredLoans = loans.filter(loan => {
                         value={device.equipmentName}
                         onChange={(e) => handleDeviceChange(index, e)}
                         placeholder="Nombre del dispositivo"
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={UI.input}
                         required
                       />
                       <input
@@ -676,17 +731,17 @@ const filteredLoans = loans.filter(loan => {
                         value={device.equipmentSerial}
                         onChange={(e) => handleDeviceChange(index, e)}
                         placeholder="Serial del dispositivo"
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={`${UI.input} font-mono`}
                         required
                       />
                       {index > 0 && (
                         <button
                           type="button"
                           onClick={() => removeDevice(index)}
-                          className="text-red-500 hover:text-red-700 p-2"
+                          className={`${UI.iconGhostDanger} p-2`}
                           title="Eliminar dispositivo"
                         >
-                          <FiTrash2 className="text-xl" />
+                          <FiTrash2 className="text-lg" />
                         </button>
                       )}
                     </div>
@@ -694,15 +749,15 @@ const filteredLoans = loans.filter(loan => {
                   <button
                     type="button"
                     onClick={addDevice}
-                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm mt-2"
+                    className={`${UI.btnGhost} mt-1`}
                   >
-                    <FiPlus /> Agregar otro dispositivo
+                    <FiPlus className="text-sm" /> Agregar otro dispositivo
                   </button>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Documento adjunto</label>
-                  <label className="flex items-center gap-2 cursor-pointer text-blue-600 hover:text-blue-800">
-                    <FiPaperclip />
+                  <label className={UI.label}>Documento adjunto</label>
+                  <label className={`${UI.btnGhost} cursor-pointer`}>
+                    <FiPaperclip className="text-sm" />
                     <span>Adjuntar documento</span>
                     <input
                       type="file"
@@ -712,31 +767,31 @@ const filteredLoans = loans.filter(loan => {
                     />
                   </label>
                   {formData.document && (
-                    <p className="text-sm text-gray-600 mt-2">{formData.document}</p>
+                    <p className="text-xs text-ink-muted font-mono mt-2">{formData.document}</p>
                   )}
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Comentarios adicionales</label>
+                  <label className={UI.label}>Comentarios adicionales</label>
                   <textarea
                     name="comments"
                     value={formData.comments}
                     onChange={handleInputChange}
                     placeholder="Agrega comentarios adicionales..."
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent h-32"
+                    className={`${UI.input} h-28 resize-none`}
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 pt-6 mt-2 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-800 px-5 py-2.5 rounded-lg transition duration-200"
+                  className={UI.btnSecondary}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg transition duration-200"
+                  className={UI.btnPrimary}
                 >
                   {editingId ? 'Guardar Cambios' : 'Agregar'}
                 </button>
@@ -746,47 +801,54 @@ const filteredLoans = loans.filter(loan => {
         )}
 
         {showReportConfig && (
-          <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-8">
-            <h2 className="text-2xl font-semibold mb-6">Configuración de Envío de Reportes</h2>
+          <div className={UI.panel}>
+            <h2 className="font-display text-xl font-bold text-ink mb-6">Configuración de Envío de Reportes</h2>
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico</label>
+                <label className={UI.label}>Correo electrónico</label>
                 <input
                   type="email"
                   name="email"
                   value={reportConfig.email}
                   onChange={handleReportConfigChange}
                   placeholder="ejemplo@correo.com"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={UI.input}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Frecuencia de Envío</label>
+                <label className={UI.label}>Frecuencia de envío</label>
                 <select
                   name="frequency"
                   value={reportConfig.frequency}
                   onChange={handleReportConfigChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={UI.input}
                 >
                   <option value="daily">Diario</option>
                   <option value="weekly">Semanal</option>
                   <option value="monthly">Mensual</option>
                 </select>
               </div>
-              <div className="flex justify-end gap-3">
+              <div className="flex flex-wrap justify-end gap-3 pt-6 mt-2 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setShowReportConfig(false)}
+                  className={UI.btnSecondary}
+                >
+                  Cerrar
+                </button>
                 <button
                   type="button"
                   onClick={handleSendReportNow}
-                  className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-5 py-2.5 rounded-lg transition duration-200"
+                  className={UI.btnSecondary}
                 >
-                  <FiMail /> Enviar Reporte Ahora
+                  <FiMail className="text-base" /> Enviar Reporte Ahora
                 </button>
                 {!reportConfig.isScheduled ? (
                   <button
                     type="button"
                     onClick={handleScheduleReport}
-                    className="flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white px-5 py-2.5 rounded-lg transition duration-200"
+                    className={UI.btnPrimary}
                   >
                     Programar Envío Automático
                   </button>
@@ -794,42 +856,35 @@ const filteredLoans = loans.filter(loan => {
                   <button
                     type="button"
                     onClick={handleStopReport}
-                    className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-lg transition duration-200"
+                    className={UI.btnDangerOutline}
                   >
                     Detener Envío Automático
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setShowReportConfig(false)}
-                  className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-800 px-5 py-2.5 rounded-lg transition duration-200"
-                >
-                  Cerrar
-                </button>
               </div>
             </div>
           </div>
         )}
 
-        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-8">
-          <div className="space-y-4 mb-6">
-            <div className="flex items-center gap-3">
-              <FiSearch className="text-gray-500 text-lg" />
+        <div className={UI.panel}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3 flex-1 max-w-md">
+              <FiSearch className="text-ink-muted text-base flex-shrink-0" />
               <input
                 type="text"
                 placeholder="Buscar por equipo, serial o partner..."
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={UI.input}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             {activeTab === 'activos' && (
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-medium text-gray-700">Ordenar por:</label>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label className="text-xs font-semibold text-ink-muted uppercase tracking-wide whitespace-nowrap">Ordenar por</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`${UI.input} py-2`}
                 >
                   <option value="creation">Más recientes primero</option>
                   <option value="overdue">Mayor atraso primero</option>
@@ -837,119 +892,118 @@ const filteredLoans = loans.filter(loan => {
               </div>
             )}
           </div>
-        
-        
-          <div className="flex gap-4 border-b-2 border-gray-200 mb-6">
+
+          <div className="flex gap-6 border-b border-line mb-6">
             <button
               onClick={() => setActiveTab('activos')}
-              className={`flex items-center gap-2 pb-3 ${activeTab === 'activos' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'activos' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
             >
-              <FiFileText className="text-lg" /> Préstamos Activos
-              <span className="text-xs bg-blue-100 text-blue-600 px-2.5 py-1 rounded-full ml-2">
+              <FiFileText className="text-base" /> Préstamos Activos
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'activos' ? 'bg-circuit-soft text-circuit' : 'bg-paper text-ink-muted'}`}>
                 {stats.activos}
               </span>
             </button>
             <button
               onClick={() => setActiveTab('archivo')}
-              className={`flex items-center gap-2 pb-3 ${activeTab === 'archivo' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'archivo' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
             >
-              <FiArchive className="text-lg" /> Archivo
-              <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full ml-2">
+              <FiArchive className="text-base" /> Archivo
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'archivo' ? 'bg-circuit-soft text-circuit' : 'bg-paper text-ink-muted'}`}>
                 {stats.devueltos}
               </span>
             </button>
             <button
               onClick={() => setActiveTab('reportes')}
-              className={`flex items-center gap-2 pb-3 ${activeTab === 'reportes' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'reportes' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
             >
-              <FiFileText className="text-lg" /> Reportes
+              <FiFileText className="text-base" /> Reportes
             </button>
           </div>
 
           {activeTab === 'reportes' && (
-            <div className="bg-white p-6 rounded-xl shadow-md">
+            <div>
               <div className="flex justify-end gap-3 mb-6">
                 <button
                   onClick={() => handleExportReport('PDF')}
-                  className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-200"
+                  className={UI.btnSecondary}
                 >
-                  <FiFileText /> Exportar a PDF
+                  <FiFileText className="text-base" /> Exportar a PDF
                 </button>
                 <button
                   onClick={() => handleExportReport('Excel')}
-                  className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition duration-200"
+                  className={UI.btnSecondary}
                 >
-                  <FiFileText /> Exportar a Excel
+                  <FiFileText className="text-base" /> Exportar a Excel
                 </button>
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-xl mb-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Filtros</h3>
+              <div className="bg-paper rounded-lg p-5 mb-6 border border-line">
+                <h3 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Filtros</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Inicio</label>
+                    <label className={UI.label}>Fecha inicio</label>
                     <input
                       type="date"
                       name="startDate"
                       value={reportFilters.startDate}
                       onChange={handleFilterChange}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className={UI.input}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Fin</label>
+                    <label className={UI.label}>Fecha fin</label>
                     <input
                       type="date"
                       name="endDate"
                       value={reportFilters.endDate}
                       onChange={handleFilterChange}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className={UI.input}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Partner</label>
+                    <label className={UI.label}>Partner</label>
                     <input
                       type="text"
                       name="partner"
                       value={reportFilters.partner}
                       onChange={handleFilterChange}
                       placeholder="Filtrar por partner"
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className={UI.input}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                    <label className={UI.label}>Cliente</label>
                     <input
                       type="text"
                       name="client"
                       value={reportFilters.client}
                       onChange={handleFilterChange}
                       placeholder="Filtrar por cliente"
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className={UI.input}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div className="bg-purple-50 p-4 rounded-xl shadow-sm border border-purple-100">
-                  <p className="text-sm text-gray-600 mb-1">Total de préstamos</p>
-                  <p className="text-2xl font-bold text-purple-700">{stats.total}</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="rounded-lg border border-line p-4">
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Total de préstamos</p>
+                  <p className="font-mono text-2xl font-bold text-ink">{stats.total}</p>
                 </div>
-                <div className="bg-green-50 p-4 rounded-xl shadow-sm border border-green-100">
-                  <p className="text-sm text-gray-600 mb-1">Préstamos activos</p>
-                  <p className="text-2xl font-bold text-green-700">{stats.activos}</p>
+                <div className="rounded-lg border border-signal-green-line bg-signal-green-soft p-4">
+                  <p className="text-xs font-semibold text-signal-green uppercase tracking-wide mb-1.5">Préstamos activos</p>
+                  <p className="font-mono text-2xl font-bold text-signal-green">{stats.activos}</p>
                 </div>
-                <div className="bg-yellow-50 p-4 rounded-xl shadow-sm border border-yellow-100">
-                  <p className="text-sm text-gray-600 mb-1">Préstamos atrasados</p>
-                  <p className="text-2xl font-bold text-yellow-700">{stats.atrasados}</p>
+                <div className="rounded-lg border border-signal-amber-line bg-signal-amber-soft p-4">
+                  <p className="text-xs font-semibold text-signal-amber uppercase tracking-wide mb-1.5">Préstamos atrasados</p>
+                  <p className="font-mono text-2xl font-bold text-signal-amber">{stats.atrasados}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div className="bg-purple-50 p-4 rounded-xl shadow-sm border border-purple-100">
-                  <p className="text-sm text-gray-600 mb-1">Promedio de días de préstamo</p>
-                  <p className="text-2xl font-bold text-purple-700">
+                <div className="rounded-lg border border-line p-4">
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Promedio de días de préstamo</p>
+                  <p className="font-mono text-xl font-bold text-ink">
                     {loans.length > 0 ?
                       Math.round(loans.reduce((acc, loan) => {
                         const loanDate = new Date(loan.loanDate);
@@ -961,9 +1015,9 @@ const filteredLoans = loans.filter(loan => {
                       : 0} días
                   </p>
                 </div>
-                <div className="bg-blue-50 p-4 rounded-xl shadow-sm border border-blue-100">
-                  <p className="text-sm text-gray-600 mb-1">Promedio de días de atraso</p>
-                  <p className="text-2xl font-bold text-blue-700">
+                <div className="rounded-lg border border-line p-4">
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Promedio de días de atraso</p>
+                  <p className="font-mono text-xl font-bold text-ink">
                     {loans.filter(loan => loan.status === 'atrasado').length > 0 ?
                       Math.round(loans.filter(loan => loan.status === 'atrasado').reduce((acc, loan) => {
                         return acc + calculateOverdueDays(loan.returnDate);
@@ -971,9 +1025,9 @@ const filteredLoans = loans.filter(loan => {
                       : 0} días
                   </p>
                 </div>
-                <div className="bg-green-50 p-4 rounded-xl shadow-sm border border-green-100">
-                  <p className="text-sm text-gray-600 mb-1">Partner con más préstamos</p>
-                  <p className="text-xl font-bold text-green-700">
+                <div className="rounded-lg border border-line p-4">
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Partner con más préstamos</p>
+                  <p className="font-display text-lg font-bold text-ink truncate">
                     {(() => {
                       if (loans.length === 0) return 'N/A';
                       const partnerCounts = {};
@@ -995,52 +1049,46 @@ const filteredLoans = loans.filter(loan => {
               </div>
 
               <div className="mb-6">
-                <h3 className="text-xl font-semibold text-gray-800 mb-4">Detalle de Préstamos</h3>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
-                    <thead className="bg-gray-50">
+                <h3 className="font-display text-lg font-bold text-ink mb-4">Detalle de préstamos</h3>
+                <div className="overflow-x-auto rounded-lg border border-line">
+                  <table className="min-w-full divide-y divide-line">
+                    <thead className="bg-paper">
                       <tr>
-                        <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Estado</th>
-                        <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Cliente</th>
-                        <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Partner</th>
-                        <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Responsable</th>
-                        <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Dispositivos</th>
-                        <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Fecha Préstamo</th>
-                        <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Fecha Devolución</th>
-                        <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Días de Atraso</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Estado</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Cliente</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Partner</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Responsable</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Dispositivos</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Préstamo</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Devolución</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Atraso</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-line bg-surface">
                       {filterLoansByReportFilters().map(loan => (
-                        <tr key={loan.id} className="hover:bg-gray-50">
-                          <td className="py-3 px-4 border-b border-gray-200 text-sm text-gray-600">
-                            <span className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                              loan.status === 'activo' ? 'bg-green-100 text-green-800' :
-                              loan.status === 'devuelto' ? 'bg-gray-100 text-gray-800' :
-                              'bg-yellow-200 text-yellow-800'
-                            }`}>
-                              {loan.status}
-                            </span>
+                        <tr key={loan.id} className="hover:bg-paper transition-colors duration-150">
+                          <td className="py-3 px-4 text-sm">
+                            <StatusBadge status={loan.status} />
                           </td>
-                          <td className="py-3 px-4 border-b border-gray-200 text-sm text-gray-600">{loan.client}</td>
-                          <td className="py-3 px-4 border-b border-gray-200 text-sm text-gray-600">{loan.partner}</td>
-                          <td className="py-3 px-4 border-b border-gray-200 text-sm text-gray-600 font-bold uppercase">{loan.responsible}</td>
-                          <td className="py-3 px-4 border-b border-gray-200 text-sm text-gray-600">
-                            {loan.devices && loan.devices.map((device, index) => (
+                          <td className="py-3 px-4 text-sm text-ink">{loan.client}</td>
+                          <td className="py-3 px-4 text-sm text-ink">{loan.partner}</td>
+                          <td className="py-3 px-4 text-sm text-ink font-bold uppercase">{loan.responsible}</td>
+                          <td className="py-3 px-4 text-sm text-ink-muted font-mono">
+                            {(loan.devices || []).map((device, index) => (
                               <div key={index} className="mb-1">
                                 {device.equipmentName}
                               </div>
                             ))}
                           </td>
-                          <td className="py-3 px-4 border-b border-gray-200 text-sm text-gray-600">{loan.loanDate}</td>
-                          <td className="py-3 px-4 border-b border-gray-200 text-sm text-gray-600">{loan.returnDate}</td>
-                          <td className="py-3 px-4 border-b border-gray-200 text-sm">
+                          <td className="py-3 px-4 text-sm text-ink-muted font-mono">{loan.loanDate}</td>
+                          <td className="py-3 px-4 text-sm text-ink-muted font-mono">{loan.returnDate}</td>
+                          <td className="py-3 px-4 text-sm">
                             {loan.status === 'atrasado' ? (
-                              <span className="text-red-600 font-medium">
+                              <span className="font-mono font-semibold text-signal-amber">
                                 {calculateOverdueDays(loan.returnDate)} días
                               </span>
                             ) : (
-                              <span className="text-gray-500">0 días</span>
+                              <span className="font-mono text-ink-muted">—</span>
                             )}
                           </td>
                         </tr>
@@ -1053,34 +1101,22 @@ const filteredLoans = loans.filter(loan => {
           )}
 
           {activeTab !== 'reportes' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {filteredLoans.length > 0 ? (
                 filteredLoans.map(loan => (
-                  <div key={loan.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-4">
-                          <div>
-                            <h3 className="text-xl font-bold text-gray-800">{loan.partner}</h3>
-                            <p className="text-lg text-gray-600 font-semibold uppercase">{loan.responsible}</p>
-                            <p className="text-sm text-gray-500 mt-1">Cliente: {loan.client}</p>
+                  <div key={loan.id} className={`${UI.card} p-4 transition-shadow duration-150 hover:shadow-card-hover`}>
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <div className="min-w-0">
+                            <h3 className="font-display text-lg font-bold text-ink truncate">{loan.partner || 'Sin partner'}</h3>
+                            <p className="text-sm font-semibold text-ink-muted uppercase">{loan.responsible}</p>
+                            <p className="text-sm text-ink-muted mt-0.5">Cliente: {loan.client}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <select
-                              value={loan.status}
-                              onChange={(e) => handleStatusChange(loan.id, e.target.value)}
-                              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                                loan.status === 'activo' ? 'bg-green-100 text-green-800' :
-                                loan.status === 'devuelto' ? 'bg-gray-100 text-gray-800' :
-                                'bg-yellow-200 text-yellow-800'
-                              }`}
-                            >
-                              <option value="activo">Activo</option>
-                              <option value="devuelto">Devuelto</option>
-                              <option value="atrasado">Atrasado</option>
-                            </select>
+                            <StatusSelect status={loan.status} onChange={(e) => handleStatusChange(loan.id, e.target.value)} />
                             {loan.status === 'atrasado' && (
-                              <span className="text-sm text-red-600 font-medium bg-red-50 px-2 py-1 rounded">
+                              <span className="text-xs font-semibold text-signal-amber bg-signal-amber-soft border border-signal-amber-line px-2 py-1 rounded-md">
                                 {calculateOverdueDays(loan.returnDate)} días de atraso
                               </span>
                             )}
@@ -1089,47 +1125,45 @@ const filteredLoans = loans.filter(loan => {
                       </div>
                       <button
                         onClick={() => setExpandedLoanId(expandedLoanId === loan.id ? null : loan.id)}
-                        className="text-gray-500 hover:text-gray-700"
+                        className={`${UI.iconGhost} flex-shrink-0`}
                       >
                         {expandedLoanId === loan.id ? <FiChevronUp className="text-xl" /> : <FiChevronDown className="text-xl" />}
                       </button>
                     </div>
 
                     {expandedLoanId === loan.id && (
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="mt-4 pt-4 border-t border-line">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                           <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-2">Dispositivos</h4>
-                            {loan.devices && loan.devices.map((device, index) => (
-                              <div key={index} className="mb-2">
-                                <p className="text-gray-600">
-                                  <span className="font-medium">{device.equipmentName}</span>
-                                  <span className="text-gray-500 ml-2">(Serial: {device.equipmentSerial})</span>
-                                </p>
+                            <h4 className={UI.label}>Dispositivos</h4>
+                            {(loan.devices || []).map((device, index) => (
+                              <div key={index} className="mb-1.5 text-sm">
+                                <span className="font-medium text-ink">{device.equipmentName}</span>
+                                <span className="font-mono text-ink-muted ml-2">{device.equipmentSerial}</span>
                               </div>
                             ))}
                           </div>
                           <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-2">Fechas</h4>
-                            <p className="text-gray-600 mb-1">
-                              <span className="font-medium">Préstamo:</span> {loan.loanDate}
+                            <h4 className={UI.label}>Fechas</h4>
+                            <p className="text-sm text-ink mb-1">
+                              <span className="text-ink-muted">Préstamo</span> <span className="font-mono">{loan.loanDate}</span>
                             </p>
-                            <p className="text-gray-600">
-                              <span className="font-medium">Devolución:</span> {loan.returnDate}
+                            <p className="text-sm text-ink">
+                              <span className="text-ink-muted">Devolución</span> <span className="font-mono">{loan.returnDate}</span>
                             </p>
                           </div>
                         </div>
 
                         {loan.document && (
-                          <div className="mt-4 flex items-center gap-2">
-                            <FiPaperclip className="text-gray-500" />
-                            <span className="text-sm text-gray-600">{loan.document}</span>
+                          <div className="mt-4 flex items-center gap-2 text-sm">
+                            <FiPaperclip className="text-ink-muted" />
+                            <span className="text-ink-muted font-mono truncate">{loan.document}</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDownloadDocument(loan.document)
                               }}
-                              className="text-blue-500 hover:text-blue-700"
+                              className={UI.iconGhost}
                               title="Descargar documento"
                             >
                               <FiDownload />
@@ -1139,7 +1173,7 @@ const filteredLoans = loans.filter(loan => {
                                 e.stopPropagation();
                                 handleDeleteDocument(loan.id, loan.document)
                               }}
-                              className="text-red-500 hover:text-red-700"
+                              className={UI.iconGhostDanger}
                               title="Eliminar documento"
                             >
                               <FiTrash2 />
@@ -1149,29 +1183,29 @@ const filteredLoans = loans.filter(loan => {
 
                         {loan.comments && (
                           <div className="mt-4">
-                            <h4 className="text-sm font-medium text-gray-700 mb-2">Comentarios</h4>
-                            <p className="text-sm text-gray-600">{loan.comments}</p>
+                            <h4 className={UI.label}>Comentarios</h4>
+                            <p className="text-sm text-ink-muted">{loan.comments}</p>
                           </div>
                         )}
 
-                        <div className="flex justify-end gap-3 mt-4">
+                        <div className="flex justify-end gap-4 mt-4">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleEdit(loan)
                             }}
-                            className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-sm"
+                            className={UI.btnGhost}
                           >
-                            <FiEdit /> Editar
+                            <FiEdit className="text-sm" /> Editar
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteLoan(loan.id)
                             }}
-                            className="flex items-center gap-1 text-red-500 hover:text-red-700 text-sm"
+                            className={UI.btnGhostDanger}
                           >
-                            <FiTrash2 /> Eliminar
+                            <FiTrash2 className="text-sm" /> Eliminar
                           </button>
                         </div>
                       </div>
@@ -1179,28 +1213,30 @@ const filteredLoans = loans.filter(loan => {
                   </div>
                 ))
               ) : (
-                <p className="text-center text-gray-500 py-8">No hay préstamos para mostrar.</p>
+                <div className="text-center py-12">
+                  <p className="text-sm text-ink-muted">No hay préstamos que coincidan con tu búsqueda.</p>
+                </div>
               )}
             </div>
           )}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500 mb-1">Total de préstamos</p>
-            <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+          <div className={`${UI.card} p-5`}>
+            <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Total</p>
+            <p className="font-mono text-2xl font-bold text-ink">{stats.total}</p>
           </div>
-          <div className="bg-green-50 p-5 rounded-xl shadow-sm border border-green-100">
-            <p className="text-sm text-gray-500 mb-1">Préstamos activos</p>
-            <p className="text-2xl font-bold text-green-700">{stats.activos}</p>
+          <div className="rounded-xl border border-signal-green-line bg-signal-green-soft p-5">
+            <p className="text-xs font-semibold text-signal-green uppercase tracking-wide mb-1.5">Activos</p>
+            <p className="font-mono text-2xl font-bold text-signal-green">{stats.activos}</p>
           </div>
-          <div className="bg-gray-50 p-5 rounded-xl shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500 mb-1">Préstamos devueltos</p>
-            <p className="text-2xl font-bold text-gray-700">{stats.devueltos}</p>
+          <div className="rounded-xl border border-signal-slate-line bg-signal-slate-soft p-5">
+            <p className="text-xs font-semibold text-signal-slate uppercase tracking-wide mb-1.5">Devueltos</p>
+            <p className="font-mono text-2xl font-bold text-signal-slate">{stats.devueltos}</p>
           </div>
-          <div className="bg-yellow-50 p-5 rounded-xl shadow-sm border border-yellow-100">
-            <p className="text-sm text-gray-500 mb-1">Préstamos atrasados</p>
-            <p className="text-2xl font-bold text-yellow-700">{stats.atrasados}</p>
+          <div className="rounded-xl border border-signal-amber-line bg-signal-amber-soft p-5">
+            <p className="text-xs font-semibold text-signal-amber uppercase tracking-wide mb-1.5">Atrasados</p>
+            <p className="font-mono text-2xl font-bold text-signal-amber">{stats.atrasados}</p>
           </div>
         </div>
       </div>
