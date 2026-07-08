@@ -454,7 +454,7 @@ git commit -m "fix: sanitize uploaded filenames to prevent path traversal and mo
 Append to `backend/credenciales.env`:
 
 ```
-ALLOWED_ORIGIN=http://172.24.100.115:3000,http://localhost:3000
+ALLOWED_ORIGIN=http://172.24.100.115,http://localhost:3000
 ```
 
 (Adjust the list to whatever hosts actually serve the frontend — ask the user which hostnames/ports the frontend is served from in each environment before finalizing this list.)
