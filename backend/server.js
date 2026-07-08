@@ -338,6 +338,27 @@ const sendReportEmail = async (toEmail, loans) => {
   }
 };
 
+const validateLoanPayload = (body) => {
+  const requiredStringFields = ['client', 'partner', 'responsible', 'loanDate', 'returnDate'];
+  for (const field of requiredStringFields) {
+    if (typeof body[field] !== 'string' || body[field].trim() === '') {
+      return { valid: false, error: `El campo "${field}" es obligatorio.` };
+    }
+  }
+  if (!Array.isArray(body.devices) || body.devices.length === 0) {
+    return { valid: false, error: 'Debe incluir al menos un dispositivo.' };
+  }
+  for (const device of body.devices) {
+    if (typeof device.equipmentName !== 'string' || device.equipmentName.trim() === '') {
+      return { valid: false, error: 'Cada dispositivo debe tener un nombre de equipo.' };
+    }
+    if (typeof device.equipmentSerial !== 'string' || device.equipmentSerial.trim() === '') {
+      return { valid: false, error: 'Cada dispositivo debe tener un serial.' };
+    }
+  }
+  return { valid: true };
+};
+
 // ========== RUTAS PARA PRÉSTAMOS ==========
 
 // Obtener todos los préstamos
@@ -348,6 +369,10 @@ app.get('/loans', (req, res) => {
 
 // Crear un nuevo préstamo
 app.post('/loans', (req, res) => {
+  const validation = validateLoanPayload(req.body);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
   const loans = readLoans();
   const newLoan = {
     id: loans.length > 0 ? Math.max(...loans.map(l => l.id)) + 1 : 1,
@@ -363,13 +388,17 @@ app.post('/loans', (req, res) => {
 app.put('/loans/:id', (req, res) => {
   const loans = readLoans();
   const index = loans.findIndex(l => l.id === parseInt(req.params.id));
-  if (index !== -1) {
-    loans[index] = { ...loans[index], ...req.body, id: parseInt(req.params.id) };
-    saveLoans(loans);
-    res.json(loans[index]);
-  } else {
-    res.status(404).json({ error: 'Préstamo no encontrado' });
+  if (index === -1) {
+    return res.status(404).json({ error: 'Préstamo no encontrado' });
   }
+  const merged = { ...loans[index], ...req.body, id: parseInt(req.params.id) };
+  const validation = validateLoanPayload(merged);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
+  loans[index] = merged;
+  saveLoans(loans);
+  res.json(loans[index]);
 });
 
 // Eliminar un préstamo
