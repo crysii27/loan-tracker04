@@ -396,7 +396,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
 
 // Ruta para descargar archivos
 app.get('/download/:filename', (req, res) => {
-  const filename = req.params.filename;
+  const filename = path.basename(req.params.filename);
   const filePath = path.join(__dirname, 'uploads', filename);
 
   if (fs.existsSync(filePath)) {
@@ -408,7 +408,7 @@ app.get('/download/:filename', (req, res) => {
 
 // Ruta para eliminar archivos
 app.delete('/delete-file/:filename', (req, res) => {
-  const filename = req.params.filename;
+  const filename = path.basename(req.params.filename);
   const filePath = path.join(__dirname, 'uploads', filename);
 
   if (fs.existsSync(filePath)) {
