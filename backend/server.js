@@ -80,7 +80,14 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname);
+    const safeBase = path
+      .basename(file.originalname, path.extname(file.originalname))
+      .normalize('NFC')
+      .replace(/[^a-zA-Z0-9-_ ]/g, '')
+      .trim()
+      .slice(0, 100) || 'archivo';
+    const ext = path.extname(file.originalname).replace(/[^a-zA-Z0-9.]/g, '');
+    cb(null, `${Date.now()}-${safeBase}${ext}`);
   }
 });
 
