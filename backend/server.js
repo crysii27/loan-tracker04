@@ -3,6 +3,7 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 require('dotenv').config({ path: path.join(__dirname, 'credenciales.env') });
@@ -100,6 +101,115 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ========== AUTENTICACIÓN ==========
+const AUTH_CONFIG_FILE = path.join(__dirname, 'authConfig.json');
+
+const hashPassword = (password) => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const passwordHash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return { salt, passwordHash };
+};
+
+const verifyPassword = (password, salt, passwordHash) => {
+  const candidate = crypto.scryptSync(password, salt, 64);
+  const stored = Buffer.from(passwordHash, 'hex');
+  return candidate.length === stored.length && crypto.timingSafeEqual(candidate, stored);
+};
+
+const readAuthConfig = () => {
+  try {
+    if (fs.existsSync(AUTH_CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(AUTH_CONFIG_FILE, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error leyendo authConfig:', error);
+  }
+  return null;
+};
+
+const saveAuthConfig = (config) => {
+  fs.writeFileSync(AUTH_CONFIG_FILE, JSON.stringify(config, null, 2));
+};
+
+// Primera vez: sembrar la contraseña desde ADMIN_PASSWORD (credenciales.env)
+if (!readAuthConfig()) {
+  if (process.env.ADMIN_PASSWORD) {
+    saveAuthConfig(hashPassword(process.env.ADMIN_PASSWORD));
+    console.log('authConfig.json creado a partir de ADMIN_PASSWORD.');
+  } else {
+    console.warn('Sin authConfig.json ni ADMIN_PASSWORD: el login de administrador queda deshabilitado hasta configurarlo.');
+  }
+}
+
+// Sesiones en memoria: reiniciar el servidor cierra todas las sesiones (aceptado en el diseño)
+const sessions = new Map();
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+
+// Bloqueo por fuerza bruta (contador global: herramienta de un solo admin)
+let failedLoginCount = 0;
+let loginLockedUntil = 0;
+
+const requireAdmin = (req, res, next) => {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const session = token && sessions.get(token);
+  if (!session || session.expiresAt < Date.now()) {
+    if (token) sessions.delete(token);
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  req.authToken = token;
+  next();
+};
+
+app.post('/auth/login', (req, res) => {
+  if (Date.now() < loginLockedUntil) {
+    return res.status(429).json({ error: 'Demasiados intentos fallidos. Espera un minuto e intenta de nuevo.' });
+  }
+  const config = readAuthConfig();
+  if (!config) {
+    return res.status(503).json({ error: 'Autenticación no configurada en el servidor' });
+  }
+  const { password } = req.body || {};
+  if (typeof password !== 'string' || !verifyPassword(password, config.salt, config.passwordHash)) {
+    failedLoginCount += 1;
+    if (failedLoginCount >= 5) {
+      loginLockedUntil = Date.now() + 60 * 1000;
+      failedLoginCount = 0;
+    }
+    return res.status(401).json({ error: 'Contraseña incorrecta' });
+  }
+  failedLoginCount = 0;
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, { expiresAt: Date.now() + SESSION_TTL_MS });
+  res.json({ token });
+});
+
+app.post('/auth/logout', requireAdmin, (req, res) => {
+  sessions.delete(req.authToken);
+  res.json({ success: true });
+});
+
+app.get('/auth/verify', requireAdmin, (req, res) => {
+  res.json({ valid: true });
+});
+
+app.post('/auth/change-password', requireAdmin, (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  const config = readAuthConfig();
+  if (!config || typeof currentPassword !== 'string' || !verifyPassword(currentPassword, config.salt, config.passwordHash)) {
+    return res.status(403).json({ error: 'La contraseña actual no es correcta' });
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+  }
+  saveAuthConfig(hashPassword(newPassword));
+  // Cerrar todas las demás sesiones; la del solicitante sigue viva
+  for (const token of sessions.keys()) {
+    if (token !== req.authToken) sessions.delete(token);
+  }
+  res.json({ success: true });
+});
 
 // Configuración del transporte de correo
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
