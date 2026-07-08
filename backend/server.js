@@ -5,10 +5,10 @@ const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, 'credenciales.env') });
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 process.on('uncaughtException', (err) => {
   console.error('Error no manejado:', err);
@@ -92,11 +92,15 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Configuración del transporte de correo
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  console.warn('EMAIL_USER / EMAIL_PASS no están configurados en credenciales.env. El envío de reportes por correo fallará.');
+}
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER || 'reporte.prestamos.showroom@gmail.com',
-    pass: process.env.EMAIL_PASS || 'evon uhsg qubg zgai'
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
 
@@ -304,7 +308,7 @@ const sendReportEmail = async (toEmail, loans) => {
     `;
 
     const mailOptions = {
-      from: process.env.EMAIL_USER || 'reporte.prestamos.showroom@gmail.com',
+      from: process.env.EMAIL_USER,
       to: toEmail,
       subject: `📊 Reporte de Préstamos - ${today.toLocaleDateString()}`,
       html: htmlContent
