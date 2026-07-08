@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiMessageSquare, FiSearch, FiFileText, FiArchive, FiAlertCircle, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 
-// URL del servidor - Cambia esto según tu configuración
-const API_URL = 'http://172.24.100.115:5000';
+// URL del servidor - configurable vía REACT_APP_API_URL en frontend/.env
+const API_URL = process.env.REACT_APP_API_URL || 'http://172.24.100.115:5000';
 
 function App() {
   // Estados
