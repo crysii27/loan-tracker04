@@ -410,10 +410,10 @@ useEffect(() => {
         (!reportFilters.endDate || returnDate <= new Date(reportFilters.endDate));
 
       const matchesPartner =
-        !reportFilters.partner || loan.partner.toLowerCase().includes(reportFilters.partner.toLowerCase());
+        !reportFilters.partner || (loan.partner || '').toLowerCase().includes(reportFilters.partner.toLowerCase());
 
       const matchesClient =
-        !reportFilters.client || loan.client.toLowerCase().includes(reportFilters.client.toLowerCase());
+        !reportFilters.client || (loan.client || '').toLowerCase().includes(reportFilters.client.toLowerCase());
 
       const isActiveOrOverdue = loan.status !== 'devuelto';
 
@@ -429,7 +429,7 @@ useEffect(() => {
           Cliente: loan.client,
           Partner: loan.partner,
           Responsable: loan.responsible,
-          Dispositivos: loan.devices.map(device => device.equipmentName).join(', '),
+          Dispositivos: (loan.devices || []).map(device => device.equipmentName).join(', '),
           'Fecha Préstamo': loan.loanDate,
           'Fecha Devolución': loan.returnDate,
           'Días de Atraso': loan.status === 'atrasado' ? calculateOverdueDays(loan.returnDate) : '0'
@@ -484,7 +484,7 @@ useEffect(() => {
           loan.client,
           loan.partner,
           loan.responsible,
-          loan.devices.map(d => d.equipmentName).join(', '),
+          (loan.devices || []).map(d => d.equipmentName).join(', '),
           loan.loanDate,
           loan.returnDate,
           loan.status === 'atrasado' ?
@@ -517,12 +517,12 @@ const filteredLoans = loans.filter(loan => {
     activeTab === 'archivo' ? loan.status === 'devuelto' :
     true;
   const matchesSearch =
-    loan.partner.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    loan.responsible.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    loan.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (loan.partner || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (loan.responsible || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (loan.client || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (loan.devices && loan.devices.some(device =>
-      device.equipmentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      device.equipmentSerial.toLowerCase().includes(searchTerm.toLowerCase())
+      (device.equipmentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (device.equipmentSerial || '').toLowerCase().includes(searchTerm.toLowerCase())
     ));
   return matchesStatus && matchesSearch;
 }).sort((a, b) => {

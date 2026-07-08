@@ -5,3 +5,4 @@ backend/credenciales.env
 backend/.env
 *.log
 .DS_Store
+.claude/settings.local.json
