@@ -100,7 +100,6 @@ app.use(cors({
   origin: allowedOrigins.length > 0 ? allowedOrigins : true
 }));
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ========== AUTENTICACIÓN ==========
 const AUTH_CONFIG_FILE = path.join(__dirname, 'authConfig.json');
@@ -580,7 +579,7 @@ app.get('/loans', (req, res) => {
 });
 
 // Crear un nuevo préstamo
-app.post('/loans', (req, res) => {
+app.post('/loans', requireAdmin, (req, res) => {
   const validation = validateLoanPayload(req.body);
   if (!validation.valid) {
     return res.status(400).json({ error: validation.error });
@@ -597,7 +596,7 @@ app.post('/loans', (req, res) => {
 });
 
 // Actualizar un préstamo
-app.put('/loans/:id', (req, res) => {
+app.put('/loans/:id', requireAdmin, (req, res) => {
   const loans = readLoans();
   const index = loans.findIndex(l => l.id === parseInt(req.params.id));
   if (index === -1) {
@@ -614,7 +613,7 @@ app.put('/loans/:id', (req, res) => {
 });
 
 // Eliminar un préstamo
-app.delete('/loans/:id', (req, res) => {
+app.delete('/loans/:id', requireAdmin, (req, res) => {
   const loans = readLoans();
   const loan = loans.find(l => l.id === parseInt(req.params.id));
   
@@ -634,7 +633,7 @@ app.delete('/loans/:id', (req, res) => {
 // ========== RUTAS PARA ARCHIVOS ==========
 
 // Ruta para subir archivos
-app.post('/upload', upload.single('file'), (req, res) => {
+app.post('/upload', requireAdmin, upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No se subió ningún archivo' });
   }
@@ -646,7 +645,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
 });
 
 // Ruta para descargar archivos
-app.get('/download/:filename', (req, res) => {
+app.get('/download/:filename', requireAdmin, (req, res) => {
   const filename = path.basename(req.params.filename);
   const filePath = path.join(__dirname, 'uploads', filename);
 
@@ -658,7 +657,7 @@ app.get('/download/:filename', (req, res) => {
 });
 
 // Ruta para eliminar archivos
-app.delete('/delete-file/:filename', (req, res) => {
+app.delete('/delete-file/:filename', requireAdmin, (req, res) => {
   const filename = path.basename(req.params.filename);
   const filePath = path.join(__dirname, 'uploads', filename);
 
@@ -677,7 +676,7 @@ app.delete('/delete-file/:filename', (req, res) => {
 // ========== RUTAS PARA REPORTES ==========
 
 // Ruta para enviar el reporte manualmente
-app.post('/send-report', async (req, res) => {
+app.post('/send-report', requireAdmin, async (req, res) => {
   const { email, loans } = req.body;
   if (!email || !loans) {
     return res.status(400).json({ error: 'Se requiere un correo electrónico y la lista de préstamos' });
@@ -736,7 +735,7 @@ const startScheduledReport = (config) => {
 };
 
 // Obtener configuración actual de reportes
-app.get('/report-config', (req, res) => {
+app.get('/report-config', requireAdmin, (req, res) => {
   const config = readReportConfig();
   if (config) {
     res.json(config);
@@ -748,7 +747,7 @@ app.get('/report-config', (req, res) => {
 
 // Ruta para configurar el envío automático de reportes
 
-app.post('/schedule-report', (req, res) => {
+app.post('/schedule-report', requireAdmin, (req, res) => {
   const { email, frequency } = req.body;
   if (!email || !frequency) {
     return res.status(400).json({ error: 'Se requiere correo electrónico y frecuencia' });
@@ -776,7 +775,7 @@ app.post('/schedule-report', (req, res) => {
 });
 
 
-app.post('/stop-report', (req, res) => {
+app.post('/stop-report', requireAdmin, (req, res) => {
   if (scheduledJob) {
     scheduledJob.stop();
     scheduledJob = null;
