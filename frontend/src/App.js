@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp } from 'react-icons/fi';
-
-// URL del servidor - configurable vía REACT_APP_API_URL en frontend/.env
-const API_URL = process.env.REACT_APP_API_URL || 'http://172.24.100.115:5000';
+import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp, FiLock, FiSliders } from 'react-icons/fi';
+import { API_URL, apiFetch, getToken, clearToken, setSessionExpiredHandler, downloadFile } from './api';
+import LoginModal from './LoginModal';
+import AdminPanel from './AdminPanel';
 
 // Sistema de diseño: clases reutilizables (paleta y tipografía en tailwind.config.js)
 const UI = {
@@ -96,10 +96,34 @@ function App() {
 
   const [sortBy, setSortBy] = useState('creation');
 
+  // Autenticación y marca
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [branding, setBranding] = useState({ title: 'Control de Préstamos', hasLogo: false, logoVersion: null });
+
+  const loadBranding = async () => {
+    try {
+      const response = await apiFetch('/branding');
+      if (response.ok) setBranding(await response.json());
+    } catch (error) {
+      console.error('Error cargando la marca:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try { await apiFetch('/auth/logout', { method: 'POST' }); } catch { /* sin conexión: igual cerramos localmente */ }
+    clearToken();
+    setIsAdmin(false);
+    setShowAdminPanel(false);
+    setShowForm(false);
+    setShowReportConfig(false);
+  };
+
   // Función para cargar préstamos desde el servidor
   const fetchLoans = async () => {
     try {
-      const response = await fetch(`${API_URL}/loans`);
+      const response = await apiFetch('/loans');
       if (!response.ok) throw new Error('Error al cargar préstamos');
       const data = await response.json();
       setLoans(data);
@@ -116,11 +140,42 @@ function App() {
     fetchLoans();
   }, []);
 
-  // Cargar configuración de reportes al inicio
+  // Restaurar sesión de admin (si hay token válido) y luego instalar el manejador de expiración
   useEffect(() => {
+    const restoreSession = async () => {
+      const token = getToken();
+      if (token) {
+        try {
+          const response = await fetch(`${API_URL}/auth/verify`, { headers: { Authorization: `Bearer ${token}` } });
+          if (response.ok) setIsAdmin(true);
+          else clearToken();
+        } catch { /* backend inalcanzable: se queda como visitante */ }
+      }
+      setSessionExpiredHandler(() => {
+        clearToken();
+        setIsAdmin(false);
+        setShowAdminPanel(false);
+        setShowForm(false);
+        setShowReportConfig(false);
+        alert('Tu sesión expiró. Vuelve a iniciar sesión.');
+      });
+    };
+    restoreSession();
+    loadBranding();
+  }, []);
+
+  // El título configurado también nombra la pestaña del navegador
+  useEffect(() => {
+    document.title = branding.title;
+  }, [branding.title]);
+
+  // Cargar configuración de reportes (solo admin: la ruta queda protegida)
+  useEffect(() => {
+    if (!isAdmin) return;
     const fetchReportConfig = async () => {
       try {
-        const response = await fetch(`${API_URL}/report-config`);
+        const response = await apiFetch('/report-config');
+        if (!response.ok) return;
         const config = await response.json();
         if (config && config.isScheduled) {
           setReportConfig({
@@ -134,7 +189,7 @@ function App() {
       }
     };
     fetchReportConfig();
-  }, []);
+  }, [isAdmin]);
 
 
   // Actualizar préstamos cada 30 segundos para sincronización
@@ -168,7 +223,7 @@ function App() {
     for (const loan of updatedLoans) {
       const originalLoan = loans.find(l => l.id === loan.id);
       if (originalLoan && originalLoan.status !== loan.status) {
-        await fetch(`${API_URL}/loans/${loan.id}`, {
+        await apiFetch(`/loans/${loan.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loan)
@@ -182,12 +237,12 @@ function App() {
   };
 
   useEffect(() => {
-    if (loans.length > 0) {
+    if (isAdmin && loans.length > 0) {
       updateLoanStatuses();
       const interval = setInterval(updateLoanStatuses, 60000);
       return () => clearInterval(interval);
     }
-  }, [loans]);
+  }, [loans, isAdmin]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -222,7 +277,7 @@ function App() {
     formDataFile.append('file', file);
 
     try {
-      const response = await fetch(`${API_URL}/upload`, {
+      const response = await apiFetch('/upload', {
         method: 'POST',
         body: formDataFile,
       });
@@ -246,7 +301,7 @@ function App() {
 
     try {
       if (editingId) {
-        const response = await fetch(`${API_URL}/loans/${editingId}`, {
+        const response = await apiFetch(`/loans/${editingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData)
@@ -255,7 +310,7 @@ function App() {
         if (!response.ok) throw new Error('Error al actualizar');
         alert('Préstamo actualizado correctamente');
       } else {
-        const response = await fetch(`${API_URL}/loans`, {
+        const response = await apiFetch('/loans', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData)
@@ -297,7 +352,7 @@ function App() {
   const handleStatusChange = async (id, newStatus) => {
     try {
       const loan = loans.find(l => l.id === id);
-      const response = await fetch(`${API_URL}/loans/${id}`, {
+      const response = await apiFetch(`/loans/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...loan, status: newStatus })
@@ -314,7 +369,7 @@ function App() {
   const handleDeleteLoan = async (id) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este préstamo?')) {
       try {
-        const response = await fetch(`${API_URL}/loans/${id}`, {
+        const response = await apiFetch(`/loans/${id}`, {
           method: 'DELETE',
         });
 
@@ -333,14 +388,14 @@ function App() {
   const handleDeleteDocument = async (loanId, documentName) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este documento?')) {
       try {
-        const response = await fetch(`${API_URL}/delete-file/${documentName}`, {
+        const response = await apiFetch(`/delete-file/${documentName}`, {
           method: 'DELETE',
         });
 
         const data = await response.json();
         if (data.success) {
           const loan = loans.find(l => l.id === loanId);
-          await fetch(`${API_URL}/loans/${loanId}`, {
+          await apiFetch(`/loans/${loanId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...loan, document: null })
@@ -358,8 +413,13 @@ function App() {
     }
   };
 
-  const handleDownloadDocument = (documentName) => {
-    window.open(`${API_URL}/download/${documentName}`, '_blank');
+  const handleDownloadDocument = async (documentName) => {
+    try {
+      await downloadFile(`/download/${encodeURIComponent(documentName)}`, documentName);
+    } catch (error) {
+      console.error('Error descargando documento:', error);
+      alert('No se pudo descargar el documento');
+    }
   };
 
   const handleReportConfigChange = (e) => {
@@ -374,7 +434,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/send-report`, {
+      const response = await apiFetch('/send-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -403,7 +463,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/schedule-report`, {
+      const response = await apiFetch('/schedule-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -431,7 +491,7 @@ function App() {
 
   const handleStopReport = async () => {
     try {
-      const response = await fetch(`${API_URL}/stop-report`, {
+      const response = await apiFetch('/stop-report', {
         method: 'POST',
       });
 
@@ -614,39 +674,67 @@ function App() {
       <div className="h-1 bg-circuit" />
       <div className="max-w-6xl mx-auto p-4 md:p-8">
         <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-8 gap-6">
-          <div>
-            <p className="font-mono text-xs font-medium text-ink-muted uppercase tracking-widest mb-2">Showroom · Gestión de Activos</p>
-            <h1 className="font-display text-3xl font-bold text-ink tracking-tight">Control de Préstamos</h1>
-            <p className="text-sm text-ink-muted mt-1">Gestiona y controla todos los préstamos de equipos en un solo lugar</p>
+          <div className="flex items-center gap-4">
+            {branding.hasLogo && (
+              <img
+                src={`${API_URL}/branding/logo?v=${branding.logoVersion}`}
+                alt={branding.title}
+                className="h-14 w-auto"
+              />
+            )}
+            <div>
+              <p className="font-mono text-xs font-medium text-ink-muted uppercase tracking-widest mb-2">Showroom · Gestión de Activos</p>
+              <h1 className="font-display text-3xl font-bold text-ink tracking-tight">{branding.title}</h1>
+              <p className="text-sm text-ink-muted mt-1">
+                {isAdmin ? 'Gestiona y controla todos los préstamos de equipos en un solo lugar' : 'Reporte de préstamos de equipos del showroom'}
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={() => {
-                setEditingId(null);
-                setFormData({
-                  client: '',
-                  partner: '',
-                  responsible: '',
-                  loanDate: '',
-                  returnDate: '',
-                  comments: '',
-                  document: null,
-                  devices: [{ equipmentName: '', equipmentSerial: '' }],
-                });
-                setShowForm(true);
-              }}
-              className={UI.btnPrimary}
-            >
-              <FiPlus className="text-base" /> Nuevo Préstamo
-            </button>
-            <button
-              onClick={() => setShowReportConfig(true)}
-              className={UI.btnSecondary}
-            >
-              <FiSettings className="text-base" /> Configurar Reportes
-            </button>
-          </div>
+          {isAdmin && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  setEditingId(null);
+                  setFormData({
+                    client: '',
+                    partner: '',
+                    responsible: '',
+                    loanDate: '',
+                    returnDate: '',
+                    comments: '',
+                    document: null,
+                    devices: [{ equipmentName: '', equipmentSerial: '' }],
+                  });
+                  setShowForm(true);
+                }}
+                className={UI.btnPrimary}
+              >
+                <FiPlus className="text-base" /> Nuevo Préstamo
+              </button>
+              <button
+                onClick={() => setShowReportConfig(true)}
+                className={UI.btnSecondary}
+              >
+                <FiSettings className="text-base" /> Configurar Reportes
+              </button>
+              <button
+                onClick={() => setShowAdminPanel(true)}
+                className={UI.btnSecondary}
+              >
+                <FiSliders className="text-base" /> Administración
+              </button>
+            </div>
+          )}
         </div>
+
+        {showAdminPanel && (
+          <AdminPanel
+            branding={branding}
+            onBrandingChange={loadBranding}
+            onLogout={handleLogout}
+            onClose={() => setShowAdminPanel(false)}
+          />
+        )}
 
         {showForm && (
           <div className={UI.panel}>
@@ -867,60 +955,64 @@ function App() {
         )}
 
         <div className={UI.panel}>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3 flex-1 max-w-md">
-              <FiSearch className="text-ink-muted text-base flex-shrink-0" />
-              <input
-                type="text"
-                placeholder="Buscar por equipo, serial o partner..."
-                className={UI.input}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            {activeTab === 'activos' && (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <label className="text-xs font-semibold text-ink-muted uppercase tracking-wide whitespace-nowrap">Ordenar por</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className={`${UI.input} py-2`}
-                >
-                  <option value="creation">Más recientes primero</option>
-                  <option value="overdue">Mayor atraso primero</option>
-                </select>
+          {isAdmin && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3 flex-1 max-w-md">
+                <FiSearch className="text-ink-muted text-base flex-shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Buscar por equipo, serial o partner..."
+                  className={UI.input}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
-            )}
-          </div>
+              {activeTab === 'activos' && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <label className="text-xs font-semibold text-ink-muted uppercase tracking-wide whitespace-nowrap">Ordenar por</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className={`${UI.input} py-2`}
+                  >
+                    <option value="creation">Más recientes primero</option>
+                    <option value="overdue">Mayor atraso primero</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
 
-          <div className="flex gap-6 border-b border-line mb-6">
-            <button
-              onClick={() => setActiveTab('activos')}
-              className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'activos' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
-            >
-              <FiFileText className="text-base" /> Préstamos Activos
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'activos' ? 'bg-circuit-soft text-circuit' : 'bg-paper text-ink-muted'}`}>
-                {stats.activos}
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab('archivo')}
-              className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'archivo' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
-            >
-              <FiArchive className="text-base" /> Archivo
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'archivo' ? 'bg-circuit-soft text-circuit' : 'bg-paper text-ink-muted'}`}>
-                {stats.devueltos}
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab('reportes')}
-              className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'reportes' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
-            >
-              <FiFileText className="text-base" /> Reportes
-            </button>
-          </div>
+          {isAdmin && (
+            <div className="flex gap-6 border-b border-line mb-6">
+              <button
+                onClick={() => setActiveTab('activos')}
+                className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'activos' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
+              >
+                <FiFileText className="text-base" /> Préstamos Activos
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'activos' ? 'bg-circuit-soft text-circuit' : 'bg-paper text-ink-muted'}`}>
+                  {stats.activos}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('archivo')}
+                className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'archivo' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
+              >
+                <FiArchive className="text-base" /> Archivo
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'archivo' ? 'bg-circuit-soft text-circuit' : 'bg-paper text-ink-muted'}`}>
+                  {stats.devueltos}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('reportes')}
+                className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'reportes' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
+              >
+                <FiFileText className="text-base" /> Reportes
+              </button>
+            </div>
+          )}
 
-          {activeTab === 'reportes' && (
+          {(!isAdmin || activeTab === 'reportes') && (
             <div>
               <div className="flex justify-end gap-3 mb-6">
                 <button
@@ -1100,7 +1192,7 @@ function App() {
             </div>
           )}
 
-          {activeTab !== 'reportes' && (
+          {isAdmin && activeTab !== 'reportes' && (
             <div className="space-y-3">
               {filteredLoans.length > 0 ? (
                 filteredLoans.map(loan => (
@@ -1221,24 +1313,44 @@ function App() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className={`${UI.card} p-5`}>
-            <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Total</p>
-            <p className="font-mono text-2xl font-bold text-ink">{stats.total}</p>
+        {isAdmin && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className={`${UI.card} p-5`}>
+              <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Total</p>
+              <p className="font-mono text-2xl font-bold text-ink">{stats.total}</p>
+            </div>
+            <div className="rounded-xl border border-signal-green-line bg-signal-green-soft p-5">
+              <p className="text-xs font-semibold text-signal-green uppercase tracking-wide mb-1.5">Activos</p>
+              <p className="font-mono text-2xl font-bold text-signal-green">{stats.activos}</p>
+            </div>
+            <div className="rounded-xl border border-signal-slate-line bg-signal-slate-soft p-5">
+              <p className="text-xs font-semibold text-signal-slate uppercase tracking-wide mb-1.5">Devueltos</p>
+              <p className="font-mono text-2xl font-bold text-signal-slate">{stats.devueltos}</p>
+            </div>
+            <div className="rounded-xl border border-signal-amber-line bg-signal-amber-soft p-5">
+              <p className="text-xs font-semibold text-signal-amber uppercase tracking-wide mb-1.5">Atrasados</p>
+              <p className="font-mono text-2xl font-bold text-signal-amber">{stats.atrasados}</p>
+            </div>
           </div>
-          <div className="rounded-xl border border-signal-green-line bg-signal-green-soft p-5">
-            <p className="text-xs font-semibold text-signal-green uppercase tracking-wide mb-1.5">Activos</p>
-            <p className="font-mono text-2xl font-bold text-signal-green">{stats.activos}</p>
-          </div>
-          <div className="rounded-xl border border-signal-slate-line bg-signal-slate-soft p-5">
-            <p className="text-xs font-semibold text-signal-slate uppercase tracking-wide mb-1.5">Devueltos</p>
-            <p className="font-mono text-2xl font-bold text-signal-slate">{stats.devueltos}</p>
-          </div>
-          <div className="rounded-xl border border-signal-amber-line bg-signal-amber-soft p-5">
-            <p className="text-xs font-semibold text-signal-amber uppercase tracking-wide mb-1.5">Atrasados</p>
-            <p className="font-mono text-2xl font-bold text-signal-amber">{stats.atrasados}</p>
-          </div>
-        </div>
+        )}
+
+        {!isAdmin && (
+          <footer className="mt-10 flex justify-center">
+            <button
+              onClick={() => setShowLogin(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-muted transition-colors duration-150 hover:text-circuit"
+            >
+              <FiLock className="text-xs" /> Acceso administrador
+            </button>
+          </footer>
+        )}
+
+        {showLogin && (
+          <LoginModal
+            onSuccess={() => { setShowLogin(false); setIsAdmin(true); }}
+            onClose={() => setShowLogin(false)}
+          />
+        )}
       </div>
     </div>
   );
