@@ -264,6 +264,7 @@ app.get('/branding/logo', (req, res) => {
   const config = readBrandingConfig();
   const logoPath = config.logoFile && path.join(BRANDING_DIR, config.logoFile);
   if (logoPath && fs.existsSync(logoPath)) {
+    res.set('X-Content-Type-Options', 'nosniff');
     res.sendFile(logoPath);
   } else {
     res.status(404).json({ error: 'No hay logo configurado' });

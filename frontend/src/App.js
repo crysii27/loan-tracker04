@@ -112,7 +112,13 @@ function App() {
   };
 
   const handleLogout = async () => {
-    try { await apiFetch('/auth/logout', { method: 'POST' }); } catch { /* sin conexión: igual cerramos localmente */ }
+    // fetch directo (no apiFetch): si el token ya expiró, el 401 no debe disparar la alerta de sesión expirada
+    const token = getToken();
+    if (token) {
+      try {
+        await fetch(`${API_URL}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      } catch { /* sin conexión: igual cerramos localmente */ }
+    }
     clearToken();
     setIsAdmin(false);
     setShowAdminPanel(false);
