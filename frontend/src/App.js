@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp, FiLock, FiSliders } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp, FiLock, FiSliders, FiX } from 'react-icons/fi';
 import { API_URL, apiFetch, getToken, clearToken, setSessionExpiredHandler, downloadFile } from './api';
 import LoginModal from './LoginModal';
 import AdminPanel from './AdminPanel';
@@ -58,6 +58,22 @@ const StatusSelect = ({ status, onChange }) => {
   );
 };
 
+// Filtros compartidos por Reportes, Préstamos en Curso y Archivo (Estado se evalúa aparte, solo aplica en Reportes)
+const matchesCommonFilters = (loan, filters) => {
+  const loanDate = new Date(loan.loanDate);
+  const matchesDateRange =
+    (!filters.loanDateFrom || loanDate >= new Date(filters.loanDateFrom)) &&
+    (!filters.loanDateTo || loanDate <= new Date(filters.loanDateTo));
+  const matchesPartner = !filters.partner || loan.partner === filters.partner;
+  const matchesClient = !filters.client || loan.client === filters.client;
+  const matchesResponsible = !filters.responsible || loan.responsible === filters.responsible;
+  const matchesEquipmentOwner =
+    !filters.equipmentOwner || (loan.devices || []).some(device => device.equipmentOwner === filters.equipmentOwner);
+  return matchesDateRange && matchesPartner && matchesClient && matchesResponsible && matchesEquipmentOwner;
+};
+
+const countActiveFilters = (filters) => Object.values(filters).filter(Boolean).length;
+
 function App() {
   // Estados
   const [loans, setLoans] = useState([]);
@@ -71,7 +87,7 @@ function App() {
     returnDate: '',
     comments: '',
     document: null,
-    devices: [{ equipmentName: '', equipmentSerial: '' }],
+    devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '' }],
   });
 
   const [editingId, setEditingId] = useState(null);
@@ -82,18 +98,33 @@ function App() {
   const [expandedLoanId, setExpandedLoanId] = useState(null);
 
   const [reportConfig, setReportConfig] = useState({
-    email: '',
+    emails: [],
     frequency: 'daily',
     isScheduled: false
   });
+  const [emailInput, setEmailInput] = useState('');
+  const [emailInputError, setEmailInputError] = useState('');
 
   const [reportFilters, setReportFilters] = useState({
     loanDateFrom: '',
     loanDateTo: '',
     partner: '',
     client: '',
+    responsible: '',
+    equipmentOwner: '',
     status: '',
   });
+
+  // Filtros compartidos por las pestañas "Préstamos en Curso" y "Archivo" (revelado progresivo: ocultos por defecto)
+  const [listFilters, setListFilters] = useState({
+    loanDateFrom: '',
+    loanDateTo: '',
+    partner: '',
+    client: '',
+    responsible: '',
+    equipmentOwner: '',
+  });
+  const [showListFilters, setShowListFilters] = useState(false);
 
   const [sortBy, setSortBy] = useState('creation');
 
@@ -186,7 +217,7 @@ function App() {
         const config = await response.json();
         if (config && config.isScheduled) {
           setReportConfig({
-            email: config.email,
+            emails: config.emails || [],
             frequency: config.frequency,
             isScheduled: config.isScheduled
           });
@@ -266,7 +297,7 @@ function App() {
   const addDevice = () => {
     setFormData({
       ...formData,
-      devices: [...formData.devices, { equipmentName: '', equipmentSerial: '' }]
+      devices: [...formData.devices, { equipmentName: '', equipmentSerial: '', equipmentOwner: '' }]
     });
   };
 
@@ -337,7 +368,7 @@ function App() {
         returnDate: '',
         comments: '',
         document: null,
-        devices: [{ equipmentName: '', equipmentSerial: '' }],
+        devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '' }],
       });
       setEditingId(null);
       setShowForm(false);
@@ -350,7 +381,10 @@ function App() {
   const handleEdit = (loan) => {
     setFormData({
       ...loan,
-      devices: loan.devices || [{ equipmentName: '', equipmentSerial: '' }]
+      // Normaliza dispositivos guardados antes de que existiera "Dueño del equipo"
+      devices: (loan.devices && loan.devices.length > 0)
+        ? loan.devices.map(device => ({ equipmentOwner: '', ...device }))
+        : [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '' }]
     });
     setEditingId(loan.id);
     setShowForm(true);
@@ -434,9 +468,38 @@ function App() {
     setReportConfig({ ...reportConfig, [name]: value });
   };
 
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+  const addEmailRecipient = () => {
+    const value = emailInput.trim();
+    if (!value) return;
+    if (!isValidEmail(value)) {
+      setEmailInputError('Ese correo no parece válido');
+      return;
+    }
+    if (reportConfig.emails.includes(value)) {
+      setEmailInputError('Ese correo ya está en la lista');
+      return;
+    }
+    setReportConfig({ ...reportConfig, emails: [...reportConfig.emails, value] });
+    setEmailInput('');
+    setEmailInputError('');
+  };
+
+  const removeEmailRecipient = (email) => {
+    setReportConfig({ ...reportConfig, emails: reportConfig.emails.filter(e => e !== email) });
+  };
+
+  const handleEmailInputKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addEmailRecipient();
+    }
+  };
+
   const handleSendReportNow = async () => {
-    if (!reportConfig.email) {
-      alert('Por favor, ingresa un correo electrónico');
+    if (reportConfig.emails.length === 0) {
+      alert('Agrega al menos un correo electrónico destinatario');
       return;
     }
 
@@ -445,7 +508,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: reportConfig.email,
+          emails: reportConfig.emails,
           loans: loans
         }),
       });
@@ -464,8 +527,8 @@ function App() {
   };
 
   const handleScheduleReport = async () => {
-    if (!reportConfig.email) {
-      alert('Por favor, ingresa un correo electrónico');
+    if (reportConfig.emails.length === 0) {
+      alert('Agrega al menos un correo electrónico destinatario');
       return;
     }
 
@@ -474,7 +537,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: reportConfig.email,
+          emails: reportConfig.emails,
           frequency: reportConfig.frequency
         }),
       });
@@ -521,27 +584,29 @@ function App() {
     setReportFilters({ ...reportFilters, [name]: value });
   };
 
+  const handleListFilterChange = (e) => {
+    const { name, value } = e.target;
+    setListFilters({ ...listFilters, [name]: value });
+  };
+
+  const clearListFilters = () => {
+    setListFilters({ loanDateFrom: '', loanDateTo: '', partner: '', client: '', responsible: '', equipmentOwner: '' });
+  };
+
   const filterLoansByReportFilters = () => {
     return loans.filter(loan => {
-      const loanDate = new Date(loan.loanDate);
-
-      const matchesDateRange =
-        (!reportFilters.loanDateFrom || loanDate >= new Date(reportFilters.loanDateFrom)) &&
-        (!reportFilters.loanDateTo || loanDate <= new Date(reportFilters.loanDateTo));
-
-      const matchesPartner = !reportFilters.partner || loan.partner === reportFilters.partner;
-
-      const matchesClient = !reportFilters.client || loan.client === reportFilters.client;
-
       const matchesStatus = !reportFilters.status || loan.status === reportFilters.status;
-
-      return matchesDateRange && matchesPartner && matchesClient && matchesStatus;
+      return matchesCommonFilters(loan, reportFilters) && matchesStatus;
     });
   };
 
-  // Nombres únicos de partners/clientes con préstamos, para los filtros desplegables
+  // Nombres únicos con préstamos, para los filtros desplegables
   const partnerOptions = [...new Set(loans.map(loan => loan.partner).filter(Boolean))].sort();
   const clientOptions = [...new Set(loans.map(loan => loan.client).filter(Boolean))].sort();
+  const responsibleOptions = [...new Set(loans.map(loan => loan.responsible).filter(Boolean))].sort();
+  const equipmentOwnerOptions = [...new Set(
+    loans.flatMap(loan => (loan.devices || []).map(device => device.equipmentOwner)).filter(Boolean)
+  )].sort();
 
   // Devoluciones: KPIs siempre calculados sobre todos los préstamos (no se ven afectados por los Filtros de arriba)
   const returnedLast30Days = loans.filter(loan => {
@@ -677,7 +742,7 @@ function App() {
         (device.equipmentName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (device.equipmentSerial || '').toLowerCase().includes(searchTerm.toLowerCase())
       ));
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesSearch && matchesCommonFilters(loan, listFilters);
   }).sort((a, b) => {
     // Ordenar según la opción seleccionada
     if (sortBy === 'creation') {
@@ -745,7 +810,7 @@ function App() {
                     returnDate: '',
                     comments: '',
                     document: null,
-                    devices: [{ equipmentName: '', equipmentSerial: '' }],
+                    devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '' }],
                   });
                   setShowForm(true);
                 }}
@@ -845,30 +910,40 @@ function App() {
                 <div className="md:col-span-2">
                   <label className={UI.label}>Dispositivos</label>
                   {formData.devices.map((device, index) => (
-                    <div key={index} className="flex gap-3 mb-3">
-                      <input
-                        type="text"
-                        name="equipmentName"
-                        value={device.equipmentName}
-                        onChange={(e) => handleDeviceChange(index, e)}
-                        placeholder="Nombre del dispositivo"
-                        className={UI.input}
-                        required
-                      />
-                      <input
-                        type="text"
-                        name="equipmentSerial"
-                        value={device.equipmentSerial}
-                        onChange={(e) => handleDeviceChange(index, e)}
-                        placeholder="Serial del dispositivo"
-                        className={`${UI.input} font-mono`}
-                        required
-                      />
+                    <div key={index} className="flex items-start gap-3 mb-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
+                        <input
+                          type="text"
+                          name="equipmentName"
+                          value={device.equipmentName}
+                          onChange={(e) => handleDeviceChange(index, e)}
+                          placeholder="Nombre del dispositivo"
+                          className={UI.input}
+                          required
+                        />
+                        <input
+                          type="text"
+                          name="equipmentSerial"
+                          value={device.equipmentSerial}
+                          onChange={(e) => handleDeviceChange(index, e)}
+                          placeholder="Serial del dispositivo"
+                          className={`${UI.input} font-mono`}
+                          required
+                        />
+                        <input
+                          type="text"
+                          name="equipmentOwner"
+                          value={device.equipmentOwner || ''}
+                          onChange={(e) => handleDeviceChange(index, e)}
+                          placeholder="Dueño del equipo (opcional)"
+                          className={UI.input}
+                        />
+                      </div>
                       {index > 0 && (
                         <button
                           type="button"
                           onClick={() => removeDevice(index)}
-                          className={`${UI.iconGhostDanger} p-2`}
+                          className={`${UI.iconGhostDanger} p-2 flex-shrink-0`}
                           title="Eliminar dispositivo"
                         >
                           <FiTrash2 className="text-lg" />
@@ -935,16 +1010,42 @@ function App() {
             <h2 className="font-display text-xl font-bold text-ink mb-6">Configuración de Envío de Reportes</h2>
             <div className="space-y-6">
               <div>
-                <label className={UI.label}>Correo electrónico</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={reportConfig.email}
-                  onChange={handleReportConfigChange}
-                  placeholder="ejemplo@correo.com"
-                  className={UI.input}
-                  required
-                />
+                <label className={UI.label}>Destinatarios</label>
+                <div className="flex gap-3">
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => { setEmailInput(e.target.value); setEmailInputError(''); }}
+                    onKeyDown={handleEmailInputKeyDown}
+                    placeholder="correo@empresa.com — Enter para agregar"
+                    className={UI.input}
+                  />
+                  <button type="button" onClick={addEmailRecipient} className={UI.btnSecondary}>
+                    <FiPlus className="text-sm" /> Agregar
+                  </button>
+                </div>
+                {emailInputError && (
+                  <p className="text-xs font-medium text-signal-red mt-1.5">{emailInputError}</p>
+                )}
+                {reportConfig.emails.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {reportConfig.emails.map(email => (
+                      <span key={email} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-paper border border-line text-sm text-ink">
+                        {email}
+                        <button
+                          type="button"
+                          onClick={() => removeEmailRecipient(email)}
+                          className="text-ink-muted hover:text-signal-red rounded-full p-0.5"
+                          title={`Quitar ${email}`}
+                        >
+                          <FiX className="text-xs" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-ink-muted mt-2">Agrega al menos un correo destinatario.</p>
+                )}
               </div>
               <div>
                 <label className={UI.label}>Frecuencia de envío</label>
@@ -1009,19 +1110,91 @@ function App() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              {activeTab === 'activos' && (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <label className="text-xs font-semibold text-ink-muted uppercase tracking-wide whitespace-nowrap">Ordenar por</label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className={`${UI.input} py-2`}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {activeTab !== 'reportes' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowListFilters(!showListFilters)}
+                    className={`${UI.btnSecondary} px-4 py-2`}
                   >
-                    <option value="creation">Más recientes primero</option>
-                    <option value="overdue">Mayor atraso primero</option>
+                    <FiSliders className="text-sm" /> Filtros
+                    {countActiveFilters(listFilters) > 0 && (
+                      <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-circuit-soft text-circuit">
+                        {countActiveFilters(listFilters)}
+                      </span>
+                    )}
+                    {showListFilters ? <FiChevronUp className="text-sm" /> : <FiChevronDown className="text-sm" />}
+                  </button>
+                )}
+                {activeTab === 'activos' && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-ink-muted uppercase tracking-wide whitespace-nowrap">Ordenar por</label>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className={`${UI.input} py-2`}
+                    >
+                      <option value="creation">Más recientes primero</option>
+                      <option value="overdue">Mayor atraso primero</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isAdmin && activeTab !== 'reportes' && showListFilters && (
+            <div className="bg-paper rounded-lg p-5 mb-6 border border-line">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-ink uppercase tracking-wide">Filtros</h3>
+                <button type="button" onClick={clearListFilters} className={UI.btnGhost}>Limpiar filtros</button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label className={UI.label}>Partner</label>
+                  <select name="partner" value={listFilters.partner} onChange={handleListFilterChange} className={UI.input}>
+                    <option value="">Todos</option>
+                    {partnerOptions.map(partner => (
+                      <option key={partner} value={partner}>{partner}</option>
+                    ))}
                   </select>
                 </div>
-              )}
+                <div>
+                  <label className={UI.label}>Cliente</label>
+                  <select name="client" value={listFilters.client} onChange={handleListFilterChange} className={UI.input}>
+                    <option value="">Todos</option>
+                    {clientOptions.map(client => (
+                      <option key={client} value={client}>{client}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={UI.label}>Responsable</label>
+                  <select name="responsible" value={listFilters.responsible} onChange={handleListFilterChange} className={UI.input}>
+                    <option value="">Todos</option>
+                    {responsibleOptions.map(responsible => (
+                      <option key={responsible} value={responsible}>{responsible}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={UI.label}>Dueño del equipo</label>
+                  <select name="equipmentOwner" value={listFilters.equipmentOwner} onChange={handleListFilterChange} className={UI.input}>
+                    <option value="">Todos</option>
+                    {equipmentOwnerOptions.map(owner => (
+                      <option key={owner} value={owner}>{owner}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={UI.label}>Préstamo desde</label>
+                  <input type="date" name="loanDateFrom" value={listFilters.loanDateFrom} onChange={handleListFilterChange} className={UI.input} />
+                </div>
+                <div>
+                  <label className={UI.label}>Préstamo hasta</label>
+                  <input type="date" name="loanDateTo" value={listFilters.loanDateTo} onChange={handleListFilterChange} className={UI.input} />
+                </div>
+              </div>
             </div>
           )}
 
@@ -1073,7 +1246,7 @@ function App() {
 
               <div className="bg-paper rounded-lg p-5 mb-6 border border-line">
                 <h3 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Filtros</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className={UI.label}>Estado</label>
                     <select name="status" value={reportFilters.status} onChange={handleFilterChange} className={UI.input}>
@@ -1098,6 +1271,24 @@ function App() {
                       <option value="">Todos</option>
                       {clientOptions.map(client => (
                         <option key={client} value={client}>{client}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={UI.label}>Responsable</label>
+                    <select name="responsible" value={reportFilters.responsible} onChange={handleFilterChange} className={UI.input}>
+                      <option value="">Todos</option>
+                      {responsibleOptions.map(responsible => (
+                        <option key={responsible} value={responsible}>{responsible}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={UI.label}>Dueño del equipo</label>
+                    <select name="equipmentOwner" value={reportFilters.equipmentOwner} onChange={handleFilterChange} className={UI.input}>
+                      <option value="">Todos</option>
+                      {equipmentOwnerOptions.map(owner => (
+                        <option key={owner} value={owner}>{owner}</option>
                       ))}
                     </select>
                   </div>
@@ -1313,6 +1504,9 @@ function App() {
                               <div key={index} className="mb-1.5 text-sm">
                                 <span className="font-medium text-ink">{device.equipmentName}</span>
                                 <span className="font-mono text-ink-muted ml-2">{device.equipmentSerial}</span>
+                                {device.equipmentOwner && (
+                                  <span className="text-xs text-ink-muted ml-2">· dueño: {device.equipmentOwner}</span>
+                                )}
                               </div>
                             ))}
                           </div>

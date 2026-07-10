@@ -52,7 +52,12 @@ const readReportConfig = () => {
   try {
     if (fs.existsSync(REPORT_CONFIG_FILE)) {
       const data = fs.readFileSync(REPORT_CONFIG_FILE, 'utf8');
-      return JSON.parse(data);
+      const config = JSON.parse(data);
+      // Migración: configuraciones guardadas antes de soportar múltiples destinatarios tenían "email" (string)
+      if (!config.emails && config.email) {
+        config.emails = [config.email];
+      }
+      return config;
     }
     return null;
   } catch (error) {
@@ -327,10 +332,11 @@ const transporter = nodemailer.createTransport({
 });
 
 // Función para enviar el reporte por correo
-const sendReportEmail = async (toEmail, loans) => {
+const sendReportEmail = async (toEmails, loans) => {
   try {
     const today = new Date();
-    const activeLoans = loans.filter(loan => loan.status !== 'devuelto');
+    // Segregación estricta: activos y atrasados nunca se solapan (antes "activos" incluía atrasados)
+    const activeLoans = loans.filter(loan => loan.status === 'activo');
     const overdueLoans = loans.filter(loan => loan.status === 'atrasado');
 
     const totalLoans = loans.length;
@@ -567,7 +573,7 @@ const sendReportEmail = async (toEmail, loans) => {
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: toEmail,
+      to: toEmails.join(', '),
       subject: `📊 Reporte de Préstamos - ${today.toLocaleDateString()}`,
       html: htmlContent
     };
@@ -720,12 +726,12 @@ app.delete('/delete-file/:filename', requireAdmin, (req, res) => {
 
 // Ruta para enviar el reporte manualmente
 app.post('/send-report', requireAdmin, async (req, res) => {
-  const { email, loans } = req.body;
-  if (!email || !loans) {
-    return res.status(400).json({ error: 'Se requiere un correo electrónico y la lista de préstamos' });
+  const { emails, loans } = req.body;
+  if (!Array.isArray(emails) || emails.length === 0 || !loans) {
+    return res.status(400).json({ error: 'Se requiere al menos un correo electrónico y la lista de préstamos' });
   }
   try {
-    const result = await sendReportEmail(email, loans);
+    const result = await sendReportEmail(emails, loans);
     if (result.success) {
       res.json(result);
     } else {
@@ -764,17 +770,17 @@ const startScheduledReport = (config) => {
   }
 
   scheduledJob = cron.schedule(schedule, async () => {
-    console.log(`Enviando reporte programado a ${config.email}`);
+    console.log(`Enviando reporte programado a ${config.emails.join(', ')}`);
     const currentLoans = readLoans();
-    await sendReportEmail(config.email, currentLoans);
-    
+    await sendReportEmail(config.emails, currentLoans);
+
     // Actualizar la última ejecución
     config.lastRun = new Date().toISOString();
     saveReportConfig(config);
   });
 
   currentReportConfig = config;
-  console.log(`Reporte programado iniciado: ${config.frequency} a ${config.email}`);
+  console.log(`Reporte programado iniciado: ${config.frequency} a ${config.emails.join(', ')}`);
 };
 
 // Obtener configuración actual de reportes
@@ -791,13 +797,13 @@ app.get('/report-config', requireAdmin, (req, res) => {
 // Ruta para configurar el envío automático de reportes
 
 app.post('/schedule-report', requireAdmin, (req, res) => {
-  const { email, frequency } = req.body;
-  if (!email || !frequency) {
-    return res.status(400).json({ error: 'Se requiere correo electrónico y frecuencia' });
+  const { emails, frequency } = req.body;
+  if (!Array.isArray(emails) || emails.length === 0 || !frequency) {
+    return res.status(400).json({ error: 'Se requiere al menos un correo electrónico y la frecuencia' });
   }
 
   const config = {
-    email,
+    emails,
     frequency,
     isScheduled: true,
     scheduledAt: new Date().toISOString(),

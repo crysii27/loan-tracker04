@@ -1,7 +1,8 @@
 {
   "email": "juan.gallego@hpe.com",
   "frequency": "monthly",
-  "isScheduled": true,
+  "isScheduled": false,
   "scheduledAt": "2025-10-07T16:53:49.271Z",
-  "lastRun": "2026-07-01T14:00:02.422Z"
+  "lastRun": "2026-07-01T14:00:02.422Z",
+  "stoppedAt": "2026-07-10T04:27:08.584Z"
 }
