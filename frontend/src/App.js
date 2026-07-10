@@ -88,10 +88,11 @@ function App() {
   });
 
   const [reportFilters, setReportFilters] = useState({
-    startDate: '',
-    endDate: '',
+    loanDateFrom: '',
+    loanDateTo: '',
     partner: '',
     client: '',
+    status: '',
   });
 
   const [sortBy, setSortBy] = useState('creation');
@@ -523,23 +524,55 @@ function App() {
   const filterLoansByReportFilters = () => {
     return loans.filter(loan => {
       const loanDate = new Date(loan.loanDate);
-      const returnDate = new Date(loan.returnDate);
 
       const matchesDateRange =
-        (!reportFilters.startDate || loanDate >= new Date(reportFilters.startDate)) &&
-        (!reportFilters.endDate || returnDate <= new Date(reportFilters.endDate));
+        (!reportFilters.loanDateFrom || loanDate >= new Date(reportFilters.loanDateFrom)) &&
+        (!reportFilters.loanDateTo || loanDate <= new Date(reportFilters.loanDateTo));
 
-      const matchesPartner =
-        !reportFilters.partner || (loan.partner || '').toLowerCase().includes(reportFilters.partner.toLowerCase());
+      const matchesPartner = !reportFilters.partner || loan.partner === reportFilters.partner;
 
-      const matchesClient =
-        !reportFilters.client || (loan.client || '').toLowerCase().includes(reportFilters.client.toLowerCase());
+      const matchesClient = !reportFilters.client || loan.client === reportFilters.client;
 
-      const isActiveOrOverdue = loan.status !== 'devuelto';
+      const matchesStatus = !reportFilters.status || loan.status === reportFilters.status;
 
-      return matchesDateRange && matchesPartner && matchesClient && isActiveOrOverdue;
+      return matchesDateRange && matchesPartner && matchesClient && matchesStatus;
     });
   };
+
+  // Nombres únicos de partners/clientes con préstamos, para los filtros desplegables
+  const partnerOptions = [...new Set(loans.map(loan => loan.partner).filter(Boolean))].sort();
+  const clientOptions = [...new Set(loans.map(loan => loan.client).filter(Boolean))].sort();
+
+  // Devoluciones: KPIs siempre calculados sobre todos los préstamos (no se ven afectados por los Filtros de arriba)
+  const returnedLast30Days = loans.filter(loan => {
+    if (loan.status !== 'devuelto' || !loan.returnedAt) return false;
+    const diffDays = (Date.now() - new Date(loan.returnedAt).getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays <= 30;
+  }).length;
+
+  const returnedWithoutDate = loans.filter(loan => loan.status === 'devuelto' && !loan.returnedAt).length;
+
+  const monthlyReturns = (() => {
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: d.toLocaleDateString('es-CO', { month: 'short', year: 'numeric' }),
+        count: 0,
+      });
+    }
+    loans.forEach(loan => {
+      if (loan.status === 'devuelto' && loan.returnedAt) {
+        const d = new Date(loan.returnedAt);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const month = months.find(m => m.key === key);
+        if (month) month.count += 1;
+      }
+    });
+    return months;
+  })();
 
   const exportToExcel = (data) => {
     import('xlsx').then((XLSX) => {
@@ -657,12 +690,15 @@ function App() {
     return 0;
   });
 
+  // Segregación estricta: cada préstamo cuenta en un solo estado (activos y atrasados nunca se solapan)
   const stats = {
     total: loans.length,
-    activos: loans.filter(loan => loan.status !== 'devuelto').length,
+    activos: loans.filter(loan => loan.status === 'activo').length,
     devueltos: loans.filter(loan => loan.status === 'devuelto').length,
     atrasados: loans.filter(loan => loan.status === 'atrasado').length,
   };
+  // "En curso" agrupa activos + atrasados solo para la gestión operativa (la pestaña que lista ambos juntos)
+  stats.enCurso = stats.activos + stats.atrasados;
 
   if (isLoading) {
     return (
@@ -995,9 +1031,9 @@ function App() {
                 onClick={() => setActiveTab('activos')}
                 className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'activos' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
               >
-                <FiFileText className="text-base" /> Préstamos Activos
+                <FiFileText className="text-base" /> Préstamos en Curso
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'activos' ? 'bg-circuit-soft text-circuit' : 'bg-paper text-ink-muted'}`}>
-                  {stats.activos}
+                  {stats.enCurso}
                 </span>
               </button>
               <button
@@ -1037,53 +1073,58 @@ function App() {
 
               <div className="bg-paper rounded-lg p-5 mb-6 border border-line">
                 <h3 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Filtros</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   <div>
-                    <label className={UI.label}>Fecha inicio</label>
-                    <input
-                      type="date"
-                      name="startDate"
-                      value={reportFilters.startDate}
-                      onChange={handleFilterChange}
-                      className={UI.input}
-                    />
-                  </div>
-                  <div>
-                    <label className={UI.label}>Fecha fin</label>
-                    <input
-                      type="date"
-                      name="endDate"
-                      value={reportFilters.endDate}
-                      onChange={handleFilterChange}
-                      className={UI.input}
-                    />
+                    <label className={UI.label}>Estado</label>
+                    <select name="status" value={reportFilters.status} onChange={handleFilterChange} className={UI.input}>
+                      <option value="">Todos</option>
+                      <option value="activo">Activo (sin vencer)</option>
+                      <option value="atrasado">Atrasado (vencido)</option>
+                      <option value="devuelto">Devuelto</option>
+                    </select>
                   </div>
                   <div>
                     <label className={UI.label}>Partner</label>
+                    <select name="partner" value={reportFilters.partner} onChange={handleFilterChange} className={UI.input}>
+                      <option value="">Todos</option>
+                      {partnerOptions.map(partner => (
+                        <option key={partner} value={partner}>{partner}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={UI.label}>Cliente</label>
+                    <select name="client" value={reportFilters.client} onChange={handleFilterChange} className={UI.input}>
+                      <option value="">Todos</option>
+                      {clientOptions.map(client => (
+                        <option key={client} value={client}>{client}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={UI.label}>Préstamo desde</label>
                     <input
-                      type="text"
-                      name="partner"
-                      value={reportFilters.partner}
+                      type="date"
+                      name="loanDateFrom"
+                      value={reportFilters.loanDateFrom}
                       onChange={handleFilterChange}
-                      placeholder="Filtrar por partner"
                       className={UI.input}
                     />
                   </div>
                   <div>
-                    <label className={UI.label}>Cliente</label>
+                    <label className={UI.label}>Préstamo hasta</label>
                     <input
-                      type="text"
-                      name="client"
-                      value={reportFilters.client}
+                      type="date"
+                      name="loanDateTo"
+                      value={reportFilters.loanDateTo}
                       onChange={handleFilterChange}
-                      placeholder="Filtrar por cliente"
                       className={UI.input}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div className="rounded-lg border border-line p-4">
                   <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Total de préstamos</p>
                   <p className="font-mono text-2xl font-bold text-ink">{stats.total}</p>
@@ -1095,6 +1136,36 @@ function App() {
                 <div className="rounded-lg border border-signal-amber-line bg-signal-amber-soft p-4">
                   <p className="text-xs font-semibold text-signal-amber uppercase tracking-wide mb-1.5">Préstamos atrasados</p>
                   <p className="font-mono text-2xl font-bold text-signal-amber">{stats.atrasados}</p>
+                </div>
+                <div className="rounded-lg border border-signal-slate-line bg-signal-slate-soft p-4">
+                  <p className="text-xs font-semibold text-signal-slate uppercase tracking-wide mb-1.5">Devueltos (30 días)</p>
+                  <p className="font-mono text-2xl font-bold text-signal-slate">{returnedLast30Days}</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-line p-5 mb-8">
+                <div className="flex items-baseline justify-between mb-4">
+                  <h3 className="text-sm font-bold text-ink uppercase tracking-wide">Devoluciones por mes</h3>
+                  {returnedWithoutDate > 0 && (
+                    <p className="text-xs text-ink-muted">{returnedWithoutDate} devueltos antes de activar este registro no tienen fecha</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                  {monthlyReturns.map(month => {
+                    const maxCount = Math.max(1, ...monthlyReturns.map(m => m.count));
+                    return (
+                      <div key={month.key} className="flex flex-col items-center gap-2">
+                        <div className="w-full h-20 bg-paper rounded-md flex items-end overflow-hidden">
+                          <div
+                            className="w-full bg-circuit rounded-t-sm transition-all duration-300"
+                            style={{ height: `${(month.count / maxCount) * 100}%` }}
+                          />
+                        </div>
+                        <p className="font-mono text-sm font-bold text-ink">{month.count}</p>
+                        <p className="text-xs text-ink-muted capitalize">{month.label}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1158,7 +1229,8 @@ function App() {
                         <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Responsable</th>
                         <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Dispositivos</th>
                         <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Préstamo</th>
-                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Devolución</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Devolución prevista</th>
+                        <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Devuelto el</th>
                         <th className="py-3 px-4 text-left text-xs font-bold text-ink-muted uppercase tracking-wide">Atraso</th>
                       </tr>
                     </thead>
@@ -1180,6 +1252,9 @@ function App() {
                           </td>
                           <td className="py-3 px-4 text-sm text-ink-muted font-mono">{loan.loanDate}</td>
                           <td className="py-3 px-4 text-sm text-ink-muted font-mono">{loan.returnDate}</td>
+                          <td className="py-3 px-4 text-sm text-ink-muted font-mono">
+                            {loan.returnedAt ? new Date(loan.returnedAt).toLocaleDateString('es-CO') : '—'}
+                          </td>
                           <td className="py-3 px-4 text-sm">
                             {loan.status === 'atrasado' ? (
                               <span className="font-mono font-semibold text-signal-amber">

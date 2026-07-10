@@ -337,6 +337,17 @@ const sendReportEmail = async (toEmail, loans) => {
     const activeCount = activeLoans.length;
     const overdueCount = overdueLoans.length;
 
+    // Devoluciones del mes calendario anterior al envío (ej: reporte del 1 de agosto -> muestra julio)
+    const previousMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const previousMonthStart = previousMonthDate;
+    const previousMonthEnd = new Date(today.getFullYear(), today.getMonth(), 1);
+    const previousMonthLabel = previousMonthDate.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+    const returnedPreviousMonth = loans.filter(loan => {
+      if (loan.status !== 'devuelto' || !loan.returnedAt) return false;
+      const returnedAt = new Date(loan.returnedAt);
+      return returnedAt >= previousMonthStart && returnedAt < previousMonthEnd;
+    });
+
     const avgLoanDays = loans.length > 0 ?
       Math.round(loans.reduce((acc, loan) => {
         const loanDate = new Date(loan.loanDate);
@@ -508,6 +519,31 @@ const sendReportEmail = async (toEmail, loans) => {
                   </tbody>
                 </table>
               ` : ''}
+              <h2>Devoluciones de ${previousMonthLabel}</h2>
+              ${returnedPreviousMonth.length > 0 ? `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Cliente</th>
+                      <th>Partner</th>
+                      <th>Responsable</th>
+                      <th>Dispositivos</th>
+                      <th>Fecha de devolución</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${returnedPreviousMonth.map(loan => `
+                      <tr>
+                        <td>${loan.client}</td>
+                        <td>${loan.partner}</td>
+                        <td>${loan.responsible}</td>
+                        <td>${(loan.devices || []).map(d => d.equipmentName).join(', ')}</td>
+                        <td>${new Date(loan.returnedAt).toLocaleDateString('es-CO')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : `<p>No se registraron devoluciones en ${previousMonthLabel}.</p>`}
               <div class="recommendations">
                 <h3>Recomendaciones</h3>
                 <ul>
@@ -607,6 +643,12 @@ app.put('/loans/:id', requireAdmin, (req, res) => {
   const validation = validateLoanPayload(merged);
   if (!validation.valid) {
     return res.status(400).json({ error: validation.error });
+  }
+  // Registrar la fecha real de devolución al pasar a "devuelto"; limpiarla si se revierte el estado
+  if (merged.status === 'devuelto' && loans[index].status !== 'devuelto') {
+    merged.returnedAt = new Date().toISOString();
+  } else if (merged.status !== 'devuelto') {
+    merged.returnedAt = null;
   }
   loans[index] = merged;
   saveLoans(loans);
