@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp, FiLock, FiSliders, FiX } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiHardDrive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp, FiLock, FiSliders, FiX } from 'react-icons/fi';
 import { API_URL, apiFetch, getToken, clearToken, setSessionExpiredHandler, downloadFile } from './api';
 import LoginModal from './LoginModal';
 import AdminPanel from './AdminPanel';
+import InventoryTab from './InventoryTab';
 import { UI, StatusBadge, StatusSelect } from './theme';
 
 // Filtros compartidos por Reportes, Préstamos en Curso y Archivo (Estado se evalúa aparte, solo aplica en Reportes)
@@ -1058,7 +1059,7 @@ function App() {
                 />
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {activeTab !== 'reportes' && (
+                {(activeTab === 'activos' || activeTab === 'archivo') && (
                   <button
                     type="button"
                     onClick={() => setShowListFilters(!showListFilters)}
@@ -1090,7 +1091,7 @@ function App() {
             </div>
           )}
 
-          {isAdmin && activeTab !== 'reportes' && showListFilters && (
+          {isAdmin && (activeTab === 'activos' || activeTab === 'archivo') && showListFilters && (
             <div className="bg-paper rounded-lg p-5 mb-6 border border-line">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-bold text-ink uppercase tracking-wide">Filtros</h3>
@@ -1170,6 +1171,12 @@ function App() {
                 className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'reportes' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
               >
                 <FiFileText className="text-base" /> Reportes
+              </button>
+              <button
+                onClick={() => setActiveTab('inventario')}
+                className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-colors duration-150 ${activeTab === 'inventario' ? 'text-circuit border-circuit' : 'text-ink-muted border-transparent hover:text-ink'}`}
+              >
+                <FiHardDrive className="text-base" /> Inventario
               </button>
             </div>
           )}
@@ -1411,7 +1418,7 @@ function App() {
             </div>
           )}
 
-          {isAdmin && activeTab !== 'reportes' && (
+          {isAdmin && (activeTab === 'activos' || activeTab === 'archivo') && (
             <div className="space-y-3">
               {filteredLoans.length > 0 ? (
                 filteredLoans.map(loan => (
@@ -1533,9 +1540,11 @@ function App() {
               )}
             </div>
           )}
+
+          {isAdmin && activeTab === 'inventario' && <InventoryTab />}
         </div>
 
-        {isAdmin && (
+        {isAdmin && activeTab !== 'inventario' && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className={`${UI.card} p-5`}>
               <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">Total</p>
