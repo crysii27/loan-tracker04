@@ -771,11 +771,8 @@ function App() {
               />
             )}
             <div>
-              <p className="font-mono text-xs font-medium text-ink-muted uppercase tracking-widest mb-2">Showroom · Gestión de Activos</p>
+              <p className="font-mono text-xs font-medium text-ink-muted uppercase tracking-widest mb-2">Gestión de Activos</p>
               <h1 className="font-display text-3xl font-bold text-ink tracking-tight">{branding.title}</h1>
-              <p className="text-sm text-ink-muted mt-1">
-                {isAdmin ? 'Gestiona y controla todos los préstamos de equipos en un solo lugar' : 'Reporte de préstamos de equipos del showroom'}
-              </p>
             </div>
           </div>
           {isAdmin && (
