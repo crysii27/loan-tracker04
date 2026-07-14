@@ -1046,7 +1046,7 @@ function App() {
         )}
 
         <div className={UI.panel}>
-          {isAdmin && (
+          {isAdmin && (activeTab === 'activos' || activeTab === 'archivo') && (
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <div className="flex items-center gap-3 flex-1 max-w-md">
                 <FiSearch className="text-ink-muted text-base flex-shrink-0" />
