@@ -11,6 +11,7 @@ const emptyForm = {
 const InventoryTab = () => {
   const [equipment, setEquipment] = useState([]);
   const [sites, setSites] = useState([]);
+  const [equipmentOptions, setEquipmentOptions] = useState({ manufacturers: [], categories: [], owners: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -37,8 +38,17 @@ const InventoryTab = () => {
     }
   };
 
+  const loadEquipmentOptions = async () => {
+    try {
+      const response = await apiFetch('/equipment-options');
+      if (response.ok) setEquipmentOptions(await response.json());
+    } catch (error) {
+      console.error('Error cargando listas de equipo:', error);
+    }
+  };
+
   useEffect(() => {
-    Promise.all([loadEquipment(), loadSites()]).finally(() => setIsLoading(false));
+    Promise.all([loadEquipment(), loadSites(), loadEquipmentOptions()]).finally(() => setIsLoading(false));
   }, []);
 
   const findSite = (siteId) => sites.find(s => s.id === siteId);
@@ -193,21 +203,24 @@ const InventoryTab = () => {
               </div>
               <div>
                 <label className={UI.label}>Fabricante</label>
-                <input type="text" name="manufacturer" value={formData.manufacturer} onChange={handleFormChange} placeholder="Ej: HPE" className={UI.input} />
+                <select name="manufacturer" value={formData.manufacturer} onChange={handleFormChange} className={UI.input}>
+                  <option value="">Selecciona un fabricante</option>
+                  {equipmentOptions.manufacturers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                </select>
               </div>
               <div>
                 <label className={UI.label}>Categoría</label>
-                <input type="text" name="category" value={formData.category} onChange={handleFormChange} placeholder="Ej: Access Point" className={UI.input} list="category-options" />
-                <datalist id="category-options">
-                  {categoryOptions.map(c => <option key={c} value={c} />)}
-                </datalist>
+                <select name="category" value={formData.category} onChange={handleFormChange} className={UI.input}>
+                  <option value="">Selecciona una categoría</option>
+                  {equipmentOptions.categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
               </div>
               <div>
                 <label className={UI.label}>Dueño del equipo (opcional)</label>
-                <input type="text" name="owner" value={formData.owner} onChange={handleFormChange} className={UI.input} list="owner-options" />
-                <datalist id="owner-options">
-                  {ownerOptions.map(o => <option key={o} value={o} />)}
-                </datalist>
+                <select name="owner" value={formData.owner} onChange={handleFormChange} className={UI.input}>
+                  <option value="">Ninguno</option>
+                  {equipmentOptions.owners.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+                </select>
               </div>
               <div></div>
               <div>

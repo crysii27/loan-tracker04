@@ -1109,6 +1109,60 @@ app.delete('/equipment/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+// ========== INVENTARIO: OPCIONES DE EQUIPO (FABRICANTES, CATEGORÍAS, DUEÑOS) ==========
+const EQUIPMENT_OPTIONS_FILE = path.join(__dirname, 'equipmentOptions.json');
+const EQUIPMENT_OPTION_KINDS = ['manufacturers', 'categories', 'owners'];
+
+const readEquipmentOptions = () => {
+  try {
+    if (fs.existsSync(EQUIPMENT_OPTIONS_FILE)) {
+      return JSON.parse(fs.readFileSync(EQUIPMENT_OPTIONS_FILE, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error leyendo opciones de equipo:', error);
+  }
+  return { manufacturers: [], categories: [], owners: [] };
+};
+
+const saveEquipmentOptions = (options) => {
+  fs.writeFileSync(EQUIPMENT_OPTIONS_FILE, JSON.stringify(options, null, 2));
+};
+
+app.get('/equipment-options', requireAdmin, (req, res) => {
+  res.json(readEquipmentOptions());
+});
+
+app.post('/equipment-options/:kind', requireAdmin, (req, res) => {
+  const { kind } = req.params;
+  if (!EQUIPMENT_OPTION_KINDS.includes(kind)) {
+    return res.status(400).json({ error: 'Tipo de lista no válido' });
+  }
+  const { name } = req.body || {};
+  if (typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'El nombre es obligatorio' });
+  }
+  const options = readEquipmentOptions();
+  const list = options[kind];
+  if (list.some(item => namesCollide(item.name, name))) {
+    return res.status(400).json({ error: 'Ese valor ya existe en la lista' });
+  }
+  const newItem = { id: nextId(list), name: name.trim() };
+  list.push(newItem);
+  saveEquipmentOptions(options);
+  res.json(newItem);
+});
+
+app.delete('/equipment-options/:kind/:id', requireAdmin, (req, res) => {
+  const { kind } = req.params;
+  if (!EQUIPMENT_OPTION_KINDS.includes(kind)) {
+    return res.status(400).json({ error: 'Tipo de lista no válido' });
+  }
+  const options = readEquipmentOptions();
+  options[kind] = options[kind].filter(item => item.id !== parseInt(req.params.id));
+  saveEquipmentOptions(options);
+  res.json({ success: true });
+});
+
 // ========== RUTAS PARA REPORTES ==========
 
 // Ruta para enviar el reporte manualmente

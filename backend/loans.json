@@ -257,5 +257,24 @@
       }
     ],
     "status": "devuelto"
+  },
+  {
+    "id": 12,
+    "client": "cliente prueba 1",
+    "partner": "partner 1",
+    "responsible": "Chrys",
+    "loanDate": "2026-07-15",
+    "returnDate": "2026-07-21",
+    "comments": "comentario",
+    "document": null,
+    "devices": [
+      {
+        "equipmentName": "eq prueba1",
+        "equipmentSerial": "11111111",
+        "equipmentOwner": "HPE",
+        "inventoryEquipmentId": null
+      }
+    ],
+    "status": "activo"
   }
 ]
