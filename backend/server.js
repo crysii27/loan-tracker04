@@ -1082,9 +1082,30 @@ app.put('/equipment/:id', requireAdmin, (req, res) => {
 });
 
 app.delete('/equipment/:id', requireAdmin, (req, res) => {
+  const equipmentId = parseInt(req.params.id);
   const equipment = readEquipment();
-  const filtered = equipment.filter(item => item.id !== parseInt(req.params.id));
+  const filtered = equipment.filter(item => item.id !== equipmentId);
   saveEquipment(filtered);
+
+  // Evita que un ID de equipo reciclado herede por error el vínculo de un préstamo antiguo
+  const loans = readLoans();
+  let loansChanged = false;
+  const updatedLoans = loans.map(loan => {
+    if (!(loan.devices || []).some(device => device.inventoryEquipmentId === equipmentId)) {
+      return loan;
+    }
+    loansChanged = true;
+    return {
+      ...loan,
+      devices: loan.devices.map(device =>
+        device.inventoryEquipmentId === equipmentId ? { ...device, inventoryEquipmentId: null } : device
+      ),
+    };
+  });
+  if (loansChanged) {
+    saveLoans(updatedLoans);
+  }
+
   res.json({ success: true });
 });
 
