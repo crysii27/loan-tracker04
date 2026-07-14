@@ -4,6 +4,7 @@ import { API_URL, apiFetch, getToken, clearToken, setSessionExpiredHandler, down
 import LoginModal from './LoginModal';
 import AdminPanel from './AdminPanel';
 import InventoryTab from './InventoryTab';
+import EquipmentPicker from './EquipmentPicker';
 import { UI, StatusBadge, StatusSelect } from './theme';
 
 // Filtros compartidos por Reportes, Préstamos en Curso y Archivo (Estado se evalúa aparte, solo aplica en Reportes)
@@ -35,10 +36,11 @@ function App() {
     returnDate: '',
     comments: '',
     document: null,
-    devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '' }],
+    devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '', inventoryEquipmentId: null }],
   });
 
   const [editingId, setEditingId] = useState(null);
+  const [linkWarnings, setLinkWarnings] = useState({});
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState('activos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -238,14 +240,42 @@ function App() {
   const handleDeviceChange = (index, e) => {
     const { name, value } = e.target;
     const updatedDevices = [...formData.devices];
-    updatedDevices[index][name] = value;
+    updatedDevices[index] = { ...updatedDevices[index], [name]: value };
+    if (updatedDevices[index].inventoryEquipmentId) {
+      updatedDevices[index].inventoryEquipmentId = null;
+      const updatedWarnings = { ...linkWarnings };
+      delete updatedWarnings[index];
+      setLinkWarnings(updatedWarnings);
+    }
     setFormData({ ...formData, devices: updatedDevices });
+  };
+
+  const handleDeviceLink = (index, equipment) => {
+    const updatedDevices = [...formData.devices];
+    updatedDevices[index] = {
+      ...updatedDevices[index],
+      equipmentName: equipment.name,
+      equipmentSerial: equipment.serial,
+      equipmentOwner: equipment.owner || '',
+      inventoryEquipmentId: equipment.id,
+    };
+    setFormData({ ...formData, devices: updatedDevices });
+    setLinkWarnings({ ...linkWarnings, [index]: equipment.status === 'prestado' });
+  };
+
+  const handleDeviceUnlink = (index) => {
+    const updatedDevices = [...formData.devices];
+    updatedDevices[index] = { ...updatedDevices[index], inventoryEquipmentId: null };
+    setFormData({ ...formData, devices: updatedDevices });
+    const updatedWarnings = { ...linkWarnings };
+    delete updatedWarnings[index];
+    setLinkWarnings(updatedWarnings);
   };
 
   const addDevice = () => {
     setFormData({
       ...formData,
-      devices: [...formData.devices, { equipmentName: '', equipmentSerial: '', equipmentOwner: '' }]
+      devices: [...formData.devices, { equipmentName: '', equipmentSerial: '', equipmentOwner: '', inventoryEquipmentId: null }]
     });
   };
 
@@ -253,6 +283,7 @@ function App() {
     const updatedDevices = [...formData.devices];
     updatedDevices.splice(index, 1);
     setFormData({ ...formData, devices: updatedDevices });
+    setLinkWarnings({});
   };
 
   const handleDocumentChange = async (e) => {
@@ -316,7 +347,7 @@ function App() {
         returnDate: '',
         comments: '',
         document: null,
-        devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '' }],
+        devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '', inventoryEquipmentId: null }],
       });
       setEditingId(null);
       setShowForm(false);
@@ -329,11 +360,12 @@ function App() {
   const handleEdit = (loan) => {
     setFormData({
       ...loan,
-      // Normaliza dispositivos guardados antes de que existiera "Dueño del equipo"
+      // Normaliza dispositivos guardados antes de que existieran "Dueño del equipo" / vínculo de inventario
       devices: (loan.devices && loan.devices.length > 0)
-        ? loan.devices.map(device => ({ equipmentOwner: '', ...device }))
-        : [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '' }]
+        ? loan.devices.map(device => ({ equipmentOwner: '', inventoryEquipmentId: null, ...device }))
+        : [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '', inventoryEquipmentId: null }]
     });
+    setLinkWarnings({});
     setEditingId(loan.id);
     setShowForm(true);
   };
@@ -758,7 +790,7 @@ function App() {
                     returnDate: '',
                     comments: '',
                     document: null,
-                    devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '' }],
+                    devices: [{ equipmentName: '', equipmentSerial: '', equipmentOwner: '', inventoryEquipmentId: null }],
                   });
                   setShowForm(true);
                 }}
@@ -858,7 +890,8 @@ function App() {
                 <div className="md:col-span-2">
                   <label className={UI.label}>Dispositivos</label>
                   {formData.devices.map((device, index) => (
-                    <div key={index} className="flex items-start gap-3 mb-3">
+                    <div key={index} className="flex flex-col gap-3 mb-3 pb-3 border-b border-line last:border-b-0">
+                      <div className="flex items-start gap-3">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
                         <input
                           type="text"
@@ -887,6 +920,16 @@ function App() {
                           className={UI.input}
                         />
                       </div>
+                      <div className="flex-1">
+                        <EquipmentPicker
+                          linkedEquipment={device.inventoryEquipmentId ? { name: device.equipmentName, serial: device.equipmentSerial } : null}
+                          onSelect={(equipment) => handleDeviceLink(index, equipment)}
+                          onUnlink={() => handleDeviceUnlink(index)}
+                        />
+                        {linkWarnings[index] && (
+                          <p className="text-xs text-signal-amber mt-1">Este equipo ya figura prestado en otro préstamo activo</p>
+                        )}
+                      </div>
                       {index > 0 && (
                         <button
                           type="button"
@@ -897,6 +940,7 @@ function App() {
                           <FiTrash2 className="text-lg" />
                         </button>
                       )}
+                      </div>
                     </div>
                   ))}
                   <button
