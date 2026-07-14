@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FiImage, FiTrash2, FiLogOut, FiKey } from 'react-icons/fi';
 import { API_URL, apiFetch } from './api';
+import SitesAdmin from './SitesAdmin';
 
 const inputCls = 'w-full px-3.5 py-2.5 bg-surface border border-line rounded-lg text-sm text-ink placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-circuit focus:border-circuit';
 const labelCls = 'block text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5';
@@ -152,6 +153,11 @@ const AdminPanel = ({ branding, onBrandingChange, onLogout, onClose }) => {
             {passMsg && <p className="text-sm font-medium text-ink-muted">{passMsg}</p>}
           </form>
         </section>
+      </div>
+
+      <div className="mt-8 pt-8 border-t border-line">
+        <h3 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Sitios, locaciones y racks</h3>
+        <SitesAdmin />
       </div>
     </div>
   );
