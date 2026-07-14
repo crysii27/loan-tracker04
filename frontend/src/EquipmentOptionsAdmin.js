@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import { apiFetch } from './api';
 import { UI } from './theme';
 
@@ -12,11 +12,13 @@ const KIND_LABELS = {
 // Una columna reutilizable: agregar/listar/quitar valores de una de las tres listas
 const OptionColumn = ({ kind, items, onAdd, onDelete }) => {
   const [value, setValue] = useState('');
+  const [expanded, setExpanded] = useState(false);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!value.trim()) return;
-    onAdd(kind, value);
+    await onAdd(kind, value);
     setValue('');
+    setExpanded(true);
   };
 
   const handleKeyDown = (e) => {
@@ -28,7 +30,15 @@ const OptionColumn = ({ kind, items, onAdd, onDelete }) => {
 
   return (
     <div>
-      <h4 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">{KIND_LABELS[kind]}</h4>
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 mb-2"
+      >
+        {expanded ? <FiChevronDown className="text-ink-muted text-xs" /> : <FiChevronRight className="text-ink-muted text-xs" />}
+        <h4 className="text-xs font-semibold text-ink-muted uppercase tracking-wide">{KIND_LABELS[kind]}</h4>
+        <span className="text-xs text-ink-muted">· {items.length}</span>
+      </button>
       <div className="flex gap-2 mb-3">
         <input
           type="text"
@@ -42,19 +52,21 @@ const OptionColumn = ({ kind, items, onAdd, onDelete }) => {
           <FiPlus className="text-lg" />
         </button>
       </div>
-      <div className="space-y-1.5">
-        {items.map(item => (
-          <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-paper border border-line text-sm">
-            <span className="text-ink truncate">{item.name}</span>
-            <button type="button" onClick={() => onDelete(kind, item.id)} className={UI.iconGhostDanger} title="Quitar">
-              <FiTrash2 className="text-xs" />
-            </button>
-          </div>
-        ))}
-        {items.length === 0 && (
-          <p className="text-xs text-ink-muted">Sin valores todavía.</p>
-        )}
-      </div>
+      {expanded && (
+        <div className="space-y-1.5">
+          {items.map(item => (
+            <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-paper border border-line text-sm">
+              <span className="text-ink truncate">{item.name}</span>
+              <button type="button" onClick={() => onDelete(kind, item.id)} className={UI.iconGhostDanger} title="Quitar">
+                <FiTrash2 className="text-xs" />
+              </button>
+            </div>
+          ))}
+          {items.length === 0 && (
+            <p className="text-xs text-ink-muted">Sin valores todavía.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 };
