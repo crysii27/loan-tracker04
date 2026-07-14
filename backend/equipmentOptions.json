@@ -1,5 +1,56 @@
 {
-  "manufacturers": [],
-  "categories": [],
-  "owners": []
+  "manufacturers": [
+    {
+      "id": 1,
+      "name": "HPE"
+    },
+    {
+      "id": 2,
+      "name": "Juniper"
+    },
+    {
+      "id": 3,
+      "name": "Fortinet"
+    },
+    {
+      "id": 4,
+      "name": "Cisco"
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "Access Point"
+    },
+    {
+      "id": 2,
+      "name": "Switch"
+    },
+    {
+      "id": 3,
+      "name": "Gateway"
+    },
+    {
+      "id": 4,
+      "name": "Servidor"
+    }
+  ],
+  "owners": [
+    {
+      "id": 1,
+      "name": "HPE"
+    },
+    {
+      "id": 2,
+      "name": "TD SYNNEX"
+    },
+    {
+      "id": 3,
+      "name": "INGRAM MICRO"
+    },
+    {
+      "id": 4,
+      "name": "NEXYS"
+    }
+  ]
 }

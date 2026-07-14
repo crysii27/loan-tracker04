@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiCheck, FiX } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiCheck, FiX, FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import { apiFetch } from './api';
 import { UI } from './theme';
 
@@ -11,6 +11,14 @@ const SitesAdmin = () => {
   const [newLocationName, setNewLocationName] = useState({});
   const [newRackName, setNewRackName] = useState({});
   const [editing, setEditing] = useState(null);
+  const [expandedSites, setExpandedSites] = useState({});
+  const [expandedLocations, setExpandedLocations] = useState({});
+
+  const toggleSite = (siteId) => setExpandedSites({ ...expandedSites, [siteId]: !expandedSites[siteId] });
+  const toggleLocation = (siteId, locationId) => {
+    const key = `${siteId}-${locationId}`;
+    setExpandedLocations({ ...expandedLocations, [key]: !expandedLocations[key] });
+  };
 
   const loadSites = async () => {
     setLoading(true);
@@ -39,11 +47,13 @@ const SitesAdmin = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newSiteName }),
     });
+    const data = await response.json().catch(() => null);
     if (response.ok) {
       setNewSiteName('');
+      if (data) setExpandedSites({ ...expandedSites, [data.id]: true });
       loadSites();
     } else {
-      await handleApiError(response);
+      setError((data && data.error) || 'Ocurrió un error');
     }
   };
 
@@ -67,11 +77,13 @@ const SitesAdmin = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
+    const data = await response.json().catch(() => null);
     if (response.ok) {
       setNewLocationName({ ...newLocationName, [siteId]: '' });
+      if (data) setExpandedLocations({ ...expandedLocations, [`${siteId}-${data.id}`]: true });
       loadSites();
     } else {
-      await handleApiError(response);
+      setError((data && data.error) || 'Ocurrió un error');
     }
   };
 
@@ -179,7 +191,17 @@ const SitesAdmin = () => {
                 </div>
               ) : (
                 <>
-                  <h4 className="font-display text-base font-bold text-ink">{site.name}</h4>
+                  <button
+                    type="button"
+                    onClick={() => toggleSite(site.id)}
+                    className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                  >
+                    {expandedSites[site.id] ? <FiChevronDown className="text-ink-muted flex-shrink-0" /> : <FiChevronRight className="text-ink-muted flex-shrink-0" />}
+                    <h4 className="font-display text-base font-bold text-ink truncate">{site.name}</h4>
+                    <span className="text-xs text-ink-muted flex-shrink-0">
+                      · {site.locations.length} {site.locations.length === 1 ? 'locación' : 'locaciones'}
+                    </span>
+                  </button>
                   <div className="flex gap-3 flex-shrink-0">
                     <button onClick={() => startEdit('site', { siteId: site.id }, site.name)} className={UI.iconGhost} title="Renombrar">
                       <FiEdit className="text-sm" />
@@ -192,6 +214,7 @@ const SitesAdmin = () => {
               )}
             </div>
 
+            {expandedSites[site.id] && (
             <div className="mt-4 pl-4 border-l-2 border-line space-y-3">
               {site.locations.map(location => (
                 <div key={location.id}>
@@ -210,7 +233,17 @@ const SitesAdmin = () => {
                       </div>
                     ) : (
                       <>
-                        <p className="text-sm font-semibold text-ink">{location.name}</p>
+                        <button
+                          type="button"
+                          onClick={() => toggleLocation(site.id, location.id)}
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                        >
+                          {expandedLocations[`${site.id}-${location.id}`] ? <FiChevronDown className="text-ink-muted text-xs flex-shrink-0" /> : <FiChevronRight className="text-ink-muted text-xs flex-shrink-0" />}
+                          <p className="text-sm font-semibold text-ink truncate">{location.name}</p>
+                          <span className="text-xs text-ink-muted flex-shrink-0">
+                            · {location.racks.length} {location.racks.length === 1 ? 'rack' : 'racks'}
+                          </span>
+                        </button>
                         <div className="flex gap-3 flex-shrink-0">
                           <button onClick={() => startEdit('location', { siteId: site.id, locationId: location.id }, location.name)} className={UI.iconGhost} title="Renombrar">
                             <FiEdit className="text-xs" />
@@ -223,6 +256,7 @@ const SitesAdmin = () => {
                     )}
                   </div>
 
+                  {expandedLocations[`${site.id}-${location.id}`] && (
                   <div className="mt-2 pl-4 border-l-2 border-line space-y-1.5">
                     {location.racks.map(rack => (
                       <div key={rack.id} className="flex items-center justify-between gap-3">
@@ -266,6 +300,7 @@ const SitesAdmin = () => {
                       </button>
                     </div>
                   </div>
+                  )}
                 </div>
               ))}
               <div className="flex gap-2">
@@ -281,6 +316,7 @@ const SitesAdmin = () => {
                 </button>
               </div>
             </div>
+            )}
           </div>
         ))}
         {sites.length === 0 && (

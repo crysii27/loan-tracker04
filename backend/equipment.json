@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": 1,
+    "name": "eq prueba1",
+    "serial": "11111111",
+    "mac": "12345",
+    "partNumber": "AAAAHHHH",
+    "manufacturer": "HPE",
+    "category": "Access Point",
+    "owner": "TD SYNNEX",
+    "siteId": 1,
+    "locationId": 1,
+    "rackId": 1
+  }
+]

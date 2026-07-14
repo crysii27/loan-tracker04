@@ -112,7 +112,8 @@
         "equipmentSerial": "PHS9KYJ6XM"
       }
     ],
-    "status": "atrasado"
+    "status": "devuelto",
+    "returnedAt": "2026-07-14T22:23:08.402Z"
   },
   {
     "id": 4,
@@ -264,15 +265,15 @@
     "partner": "partner 1",
     "responsible": "Chrys",
     "loanDate": "2026-07-15",
-    "returnDate": "2026-07-21",
-    "comments": "comentario",
+    "returnDate": "2026-07-22",
+    "comments": "",
     "document": null,
     "devices": [
       {
         "equipmentName": "eq prueba1",
         "equipmentSerial": "11111111",
-        "equipmentOwner": "HPE",
-        "inventoryEquipmentId": null
+        "equipmentOwner": "TD SYNNEX",
+        "inventoryEquipmentId": 1
       }
     ],
     "status": "activo"
