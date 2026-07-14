@@ -722,6 +722,201 @@ app.delete('/delete-file/:filename', requireAdmin, (req, res) => {
   }
 });
 
+// ========== INVENTARIO: SITIOS, LOCACIONES, RACKS ==========
+const SITES_FILE = path.join(__dirname, 'sites.json');
+
+const readSites = () => {
+  try {
+    if (fs.existsSync(SITES_FILE)) {
+      return JSON.parse(fs.readFileSync(SITES_FILE, 'utf8'));
+    }
+    return [];
+  } catch (error) {
+    console.error('Error leyendo sitios:', error);
+    return [];
+  }
+};
+
+const saveSites = (sites) => {
+  fs.writeFileSync(SITES_FILE, JSON.stringify(sites, null, 2));
+};
+
+const nextId = (items) => (items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1);
+
+const namesCollide = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+app.get('/sites', requireAdmin, (req, res) => {
+  res.json(readSites());
+});
+
+app.post('/sites', requireAdmin, (req, res) => {
+  const { name } = req.body || {};
+  if (typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'El nombre del sitio es obligatorio' });
+  }
+  const sites = readSites();
+  if (sites.some(site => namesCollide(site.name, name))) {
+    return res.status(400).json({ error: 'Ya existe un sitio con ese nombre' });
+  }
+  const newSite = { id: nextId(sites), name: name.trim(), locations: [] };
+  sites.push(newSite);
+  saveSites(sites);
+  res.json(newSite);
+});
+
+app.put('/sites/:id', requireAdmin, (req, res) => {
+  const { name } = req.body || {};
+  if (typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'El nombre del sitio es obligatorio' });
+  }
+  const sites = readSites();
+  const site = sites.find(s => s.id === parseInt(req.params.id));
+  if (!site) {
+    return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  if (sites.some(s => s.id !== site.id && namesCollide(s.name, name))) {
+    return res.status(400).json({ error: 'Ya existe un sitio con ese nombre' });
+  }
+  site.name = name.trim();
+  saveSites(sites);
+  res.json(site);
+});
+
+app.delete('/sites/:id', requireAdmin, (req, res) => {
+  const sites = readSites();
+  const index = sites.findIndex(s => s.id === parseInt(req.params.id));
+  if (index === -1) {
+    return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  sites.splice(index, 1);
+  saveSites(sites);
+  res.json({ success: true });
+});
+
+app.post('/sites/:id/locations', requireAdmin, (req, res) => {
+  const { name } = req.body || {};
+  if (typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'El nombre de la locación es obligatorio' });
+  }
+  const sites = readSites();
+  const site = sites.find(s => s.id === parseInt(req.params.id));
+  if (!site) {
+    return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  if (site.locations.some(loc => namesCollide(loc.name, name))) {
+    return res.status(400).json({ error: 'Ya existe una locación con ese nombre en este sitio' });
+  }
+  const newLocation = { id: nextId(site.locations), name: name.trim(), racks: [] };
+  site.locations.push(newLocation);
+  saveSites(sites);
+  res.json(newLocation);
+});
+
+app.put('/sites/:id/locations/:locationId', requireAdmin, (req, res) => {
+  const { name } = req.body || {};
+  if (typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'El nombre de la locación es obligatorio' });
+  }
+  const sites = readSites();
+  const site = sites.find(s => s.id === parseInt(req.params.id));
+  if (!site) {
+    return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  const location = site.locations.find(l => l.id === parseInt(req.params.locationId));
+  if (!location) {
+    return res.status(404).json({ error: 'Locación no encontrada' });
+  }
+  if (site.locations.some(l => l.id !== location.id && namesCollide(l.name, name))) {
+    return res.status(400).json({ error: 'Ya existe una locación con ese nombre en este sitio' });
+  }
+  location.name = name.trim();
+  saveSites(sites);
+  res.json(location);
+});
+
+app.delete('/sites/:id/locations/:locationId', requireAdmin, (req, res) => {
+  const sites = readSites();
+  const site = sites.find(s => s.id === parseInt(req.params.id));
+  if (!site) {
+    return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  const index = site.locations.findIndex(l => l.id === parseInt(req.params.locationId));
+  if (index === -1) {
+    return res.status(404).json({ error: 'Locación no encontrada' });
+  }
+  site.locations.splice(index, 1);
+  saveSites(sites);
+  res.json({ success: true });
+});
+
+app.post('/sites/:id/locations/:locationId/racks', requireAdmin, (req, res) => {
+  const { name } = req.body || {};
+  if (typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'El nombre del rack es obligatorio' });
+  }
+  const sites = readSites();
+  const site = sites.find(s => s.id === parseInt(req.params.id));
+  if (!site) {
+    return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  const location = site.locations.find(l => l.id === parseInt(req.params.locationId));
+  if (!location) {
+    return res.status(404).json({ error: 'Locación no encontrada' });
+  }
+  if (location.racks.some(rack => namesCollide(rack.name, name))) {
+    return res.status(400).json({ error: 'Ya existe un rack con ese nombre en esta locación' });
+  }
+  const newRack = { id: nextId(location.racks), name: name.trim() };
+  location.racks.push(newRack);
+  saveSites(sites);
+  res.json(newRack);
+});
+
+app.put('/sites/:id/locations/:locationId/racks/:rackId', requireAdmin, (req, res) => {
+  const { name } = req.body || {};
+  if (typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'El nombre del rack es obligatorio' });
+  }
+  const sites = readSites();
+  const site = sites.find(s => s.id === parseInt(req.params.id));
+  if (!site) {
+    return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  const location = site.locations.find(l => l.id === parseInt(req.params.locationId));
+  if (!location) {
+    return res.status(404).json({ error: 'Locación no encontrada' });
+  }
+  const rack = location.racks.find(r => r.id === parseInt(req.params.rackId));
+  if (!rack) {
+    return res.status(404).json({ error: 'Rack no encontrado' });
+  }
+  if (location.racks.some(r => r.id !== rack.id && namesCollide(r.name, name))) {
+    return res.status(400).json({ error: 'Ya existe un rack con ese nombre en esta locación' });
+  }
+  rack.name = name.trim();
+  saveSites(sites);
+  res.json(rack);
+});
+
+app.delete('/sites/:id/locations/:locationId/racks/:rackId', requireAdmin, (req, res) => {
+  const sites = readSites();
+  const site = sites.find(s => s.id === parseInt(req.params.id));
+  if (!site) {
+    return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  const location = site.locations.find(l => l.id === parseInt(req.params.locationId));
+  if (!location) {
+    return res.status(404).json({ error: 'Locación no encontrada' });
+  }
+  const index = location.racks.findIndex(r => r.id === parseInt(req.params.rackId));
+  if (index === -1) {
+    return res.status(404).json({ error: 'Rack no encontrado' });
+  }
+  location.racks.splice(index, 1);
+  saveSites(sites);
+  res.json({ success: true });
+});
+
 // ========== RUTAS PARA REPORTES ==========
 
 // Ruta para enviar el reporte manualmente
