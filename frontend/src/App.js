@@ -75,6 +75,7 @@ function App() {
     equipmentOwner: '',
   });
   const [showListFilters, setShowListFilters] = useState(false);
+  const [showReportFilters, setShowReportFilters] = useState(false);
 
   const [sortBy, setSortBy] = useState('creation');
 
@@ -1227,21 +1228,37 @@ function App() {
 
           {(!isAdmin || activeTab === 'reportes') && (
             <div>
-              <div className="flex justify-end gap-3 mb-6">
+              <div className="flex justify-between gap-3 mb-6">
                 <button
-                  onClick={() => handleExportReport('PDF')}
-                  className={UI.btnSecondary}
+                  type="button"
+                  onClick={() => setShowReportFilters(!showReportFilters)}
+                  className={`${UI.btnSecondary} px-4 py-2`}
                 >
-                  <FiFileText className="text-base" /> Exportar a PDF
+                  <FiSliders className="text-sm" /> Filtros
+                  {countActiveFilters(reportFilters) > 0 && (
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-circuit-soft text-circuit">
+                      {countActiveFilters(reportFilters)}
+                    </span>
+                  )}
+                  {showReportFilters ? <FiChevronUp className="text-sm" /> : <FiChevronDown className="text-sm" />}
                 </button>
-                <button
-                  onClick={() => handleExportReport('Excel')}
-                  className={UI.btnSecondary}
-                >
-                  <FiFileText className="text-base" /> Exportar a Excel
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleExportReport('PDF')}
+                    className={UI.btnSecondary}
+                  >
+                    <FiFileText className="text-base" /> Exportar a PDF
+                  </button>
+                  <button
+                    onClick={() => handleExportReport('Excel')}
+                    className={UI.btnSecondary}
+                  >
+                    <FiFileText className="text-base" /> Exportar a Excel
+                  </button>
+                </div>
               </div>
 
+              {showReportFilters && (
               <div className="bg-paper rounded-lg p-5 mb-6 border border-line">
                 <h3 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Filtros</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1312,6 +1329,7 @@ function App() {
                   </div>
                 </div>
               </div>
+              )}
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div className="rounded-lg border border-line p-4">

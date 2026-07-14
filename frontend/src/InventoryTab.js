@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiSearch, FiSliders, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { apiFetch } from './api';
 import { UI, StatusBadge } from './theme';
 
@@ -19,6 +19,8 @@ const InventoryTab = () => {
   const [formError, setFormError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ siteId: '', locationId: '', rackId: '', category: '', owner: '', status: '' });
+  const [showFilters, setShowFilters] = useState(false);
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const loadEquipment = async () => {
     try {
@@ -257,17 +259,33 @@ const InventoryTab = () => {
       )}
 
       <div>
-        <div className="flex items-center gap-3 mb-6 max-w-md">
-          <FiSearch className="text-ink-muted text-base flex-shrink-0" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, serial o MAC..."
-            className={UI.input}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 flex-1 max-w-md">
+            <FiSearch className="text-ink-muted text-base flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, serial o MAC..."
+              className={UI.input}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilters(!showFilters)}
+            className={`${UI.btnSecondary} px-4 py-2 flex-shrink-0`}
+          >
+            <FiSliders className="text-sm" /> Filtros
+            {activeFilterCount > 0 && (
+              <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-circuit-soft text-circuit">
+                {activeFilterCount}
+              </span>
+            )}
+            {showFilters ? <FiChevronUp className="text-sm" /> : <FiChevronDown className="text-sm" />}
+          </button>
         </div>
 
+        {showFilters && (
         <div className="bg-paper rounded-lg p-5 mb-6 border border-line">
           <h3 className="text-sm font-bold text-ink uppercase tracking-wide mb-4">Filtros</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -316,6 +334,7 @@ const InventoryTab = () => {
             </div>
           </div>
         </div>
+        )}
 
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="min-w-full divide-y divide-line">
