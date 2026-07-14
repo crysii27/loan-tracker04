@@ -783,10 +783,15 @@ app.put('/sites/:id', requireAdmin, (req, res) => {
 });
 
 app.delete('/sites/:id', requireAdmin, (req, res) => {
+  const siteId = parseInt(req.params.id);
   const sites = readSites();
-  const index = sites.findIndex(s => s.id === parseInt(req.params.id));
+  const index = sites.findIndex(s => s.id === siteId);
   if (index === -1) {
     return res.status(404).json({ error: 'Sitio no encontrado' });
+  }
+  const blockingCount = readEquipment().filter(item => item.siteId === siteId).length;
+  if (blockingCount > 0) {
+    return res.status(400).json({ error: `No se puede eliminar: ${blockingCount} equipo(s) están asignados a este sitio` });
   }
   sites.splice(index, 1);
   saveSites(sites);
@@ -835,14 +840,20 @@ app.put('/sites/:id/locations/:locationId', requireAdmin, (req, res) => {
 });
 
 app.delete('/sites/:id/locations/:locationId', requireAdmin, (req, res) => {
+  const siteId = parseInt(req.params.id);
+  const locationId = parseInt(req.params.locationId);
   const sites = readSites();
-  const site = sites.find(s => s.id === parseInt(req.params.id));
+  const site = sites.find(s => s.id === siteId);
   if (!site) {
     return res.status(404).json({ error: 'Sitio no encontrado' });
   }
-  const index = site.locations.findIndex(l => l.id === parseInt(req.params.locationId));
+  const index = site.locations.findIndex(l => l.id === locationId);
   if (index === -1) {
     return res.status(404).json({ error: 'Locación no encontrada' });
+  }
+  const blockingCount = readEquipment().filter(item => item.siteId === siteId && item.locationId === locationId).length;
+  if (blockingCount > 0) {
+    return res.status(400).json({ error: `No se puede eliminar: ${blockingCount} equipo(s) están asignados a esta locación` });
   }
   site.locations.splice(index, 1);
   saveSites(sites);
@@ -899,21 +910,181 @@ app.put('/sites/:id/locations/:locationId/racks/:rackId', requireAdmin, (req, re
 });
 
 app.delete('/sites/:id/locations/:locationId/racks/:rackId', requireAdmin, (req, res) => {
+  const siteId = parseInt(req.params.id);
+  const locationId = parseInt(req.params.locationId);
+  const rackId = parseInt(req.params.rackId);
   const sites = readSites();
-  const site = sites.find(s => s.id === parseInt(req.params.id));
+  const site = sites.find(s => s.id === siteId);
   if (!site) {
     return res.status(404).json({ error: 'Sitio no encontrado' });
   }
-  const location = site.locations.find(l => l.id === parseInt(req.params.locationId));
+  const location = site.locations.find(l => l.id === locationId);
   if (!location) {
     return res.status(404).json({ error: 'Locación no encontrada' });
   }
-  const index = location.racks.findIndex(r => r.id === parseInt(req.params.rackId));
+  const index = location.racks.findIndex(r => r.id === rackId);
   if (index === -1) {
     return res.status(404).json({ error: 'Rack no encontrado' });
   }
+  const blockingCount = readEquipment().filter(item => item.siteId === siteId && item.locationId === locationId && item.rackId === rackId).length;
+  if (blockingCount > 0) {
+    return res.status(400).json({ error: `No se puede eliminar: ${blockingCount} equipo(s) están asignados a este rack` });
+  }
   location.racks.splice(index, 1);
   saveSites(sites);
+  res.json({ success: true });
+});
+
+// ========== INVENTARIO: EQUIPOS ==========
+const EQUIPMENT_FILE = path.join(__dirname, 'equipment.json');
+
+const readEquipment = () => {
+  try {
+    if (fs.existsSync(EQUIPMENT_FILE)) {
+      return JSON.parse(fs.readFileSync(EQUIPMENT_FILE, 'utf8'));
+    }
+    return [];
+  } catch (error) {
+    console.error('Error leyendo equipos:', error);
+    return [];
+  }
+};
+
+const saveEquipment = (equipment) => {
+  fs.writeFileSync(EQUIPMENT_FILE, JSON.stringify(equipment, null, 2));
+};
+
+// ¿Este equipo está vinculado a un préstamo que aún no se devuelve?
+const computeEquipmentStatus = (equipmentId, loans) => {
+  const isPrestado = loans.some(loan =>
+    loan.status !== 'devuelto' &&
+    (loan.devices || []).some(device => device.inventoryEquipmentId === equipmentId)
+  );
+  return isPrestado ? 'prestado' : 'disponible';
+};
+
+// Valida que siteId/locationId/rackId formen una cadena real dentro del árbol de sitios
+const resolveSiteLocationRack = (sites, siteId, locationId, rackId) => {
+  const site = sites.find(s => s.id === siteId);
+  if (!site) return { error: 'El sitio indicado no existe' };
+  if (locationId == null) {
+    if (rackId != null) return { error: 'No puedes indicar un rack sin indicar la locación' };
+    return { site, location: null, rack: null };
+  }
+  const location = site.locations.find(l => l.id === locationId);
+  if (!location) return { error: 'La locación indicada no pertenece a ese sitio' };
+  if (rackId == null) {
+    return { site, location, rack: null };
+  }
+  const rack = location.racks.find(r => r.id === rackId);
+  if (!rack) return { error: 'El rack indicado no pertenece a esa locación' };
+  return { site, location, rack };
+};
+
+const validateEquipmentPayload = (body, sites) => {
+  if (typeof body.name !== 'string' || body.name.trim() === '') {
+    return { valid: false, error: 'El nombre del equipo es obligatorio' };
+  }
+  if (typeof body.serial !== 'string' || body.serial.trim() === '') {
+    return { valid: false, error: 'El serial es obligatorio' };
+  }
+  if (typeof body.siteId !== 'number') {
+    return { valid: false, error: 'Debes indicar el sitio' };
+  }
+  const resolved = resolveSiteLocationRack(sites, body.siteId, body.locationId ?? null, body.rackId ?? null);
+  if (resolved.error) {
+    return { valid: false, error: resolved.error };
+  }
+  return { valid: true };
+};
+
+app.get('/equipment', requireAdmin, (req, res) => {
+  const equipment = readEquipment();
+  const loans = readLoans();
+  res.json(equipment.map(item => ({ ...item, status: computeEquipmentStatus(item.id, loans) })));
+});
+
+app.get('/equipment/search', requireAdmin, (req, res) => {
+  const query = (req.query.q || '').toString().trim().toLowerCase();
+  const equipment = readEquipment();
+  const loans = readLoans();
+  const matches = equipment
+    .filter(item =>
+      query === '' ||
+      item.name.toLowerCase().includes(query) ||
+      item.serial.toLowerCase().includes(query) ||
+      (item.mac || '').toLowerCase().includes(query)
+    )
+    .slice(0, 20)
+    .map(item => ({ ...item, status: computeEquipmentStatus(item.id, loans) }));
+  res.json(matches);
+});
+
+app.post('/equipment', requireAdmin, (req, res) => {
+  const sites = readSites();
+  const validation = validateEquipmentPayload(req.body, sites);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
+  const equipment = readEquipment();
+  const serial = req.body.serial.trim();
+  if (equipment.some(item => item.serial.toLowerCase() === serial.toLowerCase())) {
+    return res.status(400).json({ error: 'Ya existe un equipo con ese serial' });
+  }
+  const newEquipment = {
+    id: nextId(equipment),
+    name: req.body.name.trim(),
+    serial,
+    mac: req.body.mac || '',
+    partNumber: req.body.partNumber || '',
+    manufacturer: req.body.manufacturer || '',
+    category: req.body.category || '',
+    owner: req.body.owner || '',
+    siteId: req.body.siteId,
+    locationId: req.body.locationId ?? null,
+    rackId: req.body.rackId ?? null,
+  };
+  equipment.push(newEquipment);
+  saveEquipment(equipment);
+  res.json(newEquipment);
+});
+
+app.put('/equipment/:id', requireAdmin, (req, res) => {
+  const sites = readSites();
+  const validation = validateEquipmentPayload(req.body, sites);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
+  const equipment = readEquipment();
+  const index = equipment.findIndex(item => item.id === parseInt(req.params.id));
+  if (index === -1) {
+    return res.status(404).json({ error: 'Equipo no encontrado' });
+  }
+  const serial = req.body.serial.trim();
+  if (equipment.some(item => item.id !== equipment[index].id && item.serial.toLowerCase() === serial.toLowerCase())) {
+    return res.status(400).json({ error: 'Ya existe un equipo con ese serial' });
+  }
+  equipment[index] = {
+    ...equipment[index],
+    name: req.body.name.trim(),
+    serial,
+    mac: req.body.mac || '',
+    partNumber: req.body.partNumber || '',
+    manufacturer: req.body.manufacturer || '',
+    category: req.body.category || '',
+    owner: req.body.owner || '',
+    siteId: req.body.siteId,
+    locationId: req.body.locationId ?? null,
+    rackId: req.body.rackId ?? null,
+  };
+  saveEquipment(equipment);
+  res.json(equipment[index]);
+});
+
+app.delete('/equipment/:id', requireAdmin, (req, res) => {
+  const equipment = readEquipment();
+  const filtered = equipment.filter(item => item.id !== parseInt(req.params.id));
+  saveEquipment(filtered);
   res.json({ success: true });
 });
 
