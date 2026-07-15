@@ -302,6 +302,7 @@ const InventoryTab = () => {
                 <option value="">Todas</option>
                 {filterSite?.locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
               </select>
+              {!filterSite && <p className="text-xs text-ink-muted mt-1">Elige un sitio primero</p>}
             </div>
             <div>
               <label className={UI.label}>Rack</label>
@@ -309,6 +310,7 @@ const InventoryTab = () => {
                 <option value="">Todos</option>
                 {filterLocation?.racks.map(rack => <option key={rack.id} value={rack.id}>{rack.name}</option>)}
               </select>
+              {filterSite && !filterLocation && <p className="text-xs text-ink-muted mt-1">Elige una locación primero</p>}
             </div>
             <div>
               <label className={UI.label}>Categoría</label>

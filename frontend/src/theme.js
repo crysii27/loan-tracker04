@@ -10,7 +10,7 @@ export const UI = {
   btnGhostDanger: 'inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors duration-150 hover:text-signal-red',
   iconGhost: 'text-ink-muted transition-colors duration-150 hover:text-circuit',
   iconGhostDanger: 'text-ink-muted transition-colors duration-150 hover:text-signal-red',
-  input: 'w-full px-3.5 py-2.5 bg-surface border border-line rounded-lg text-sm text-ink placeholder-ink-muted transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-circuit focus:border-circuit',
+  input: 'w-full px-3.5 py-2.5 bg-surface border border-line rounded-lg text-sm text-ink placeholder-ink-muted transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-circuit focus:border-circuit disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-paper',
   label: 'block text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5',
   card: 'bg-surface rounded-xl border border-line shadow-card',
   panel: 'bg-surface rounded-xl border border-line shadow-card p-6 mb-8',
