@@ -534,7 +534,7 @@ function App() {
   };
 
   const handleOverdueIntervalChange = (e) => {
-    setAlertConfig({ ...alertConfig, overdueIntervalDays: parseInt(e.target.value, 10) || 1 });
+    setAlertConfig({ ...alertConfig, overdueIntervalDays: Math.max(1, parseInt(e.target.value, 10) || 1) });
   };
 
   const handleSaveAlertConfig = async () => {
