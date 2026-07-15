@@ -621,6 +621,125 @@ const sendReportEmail = async (toEmails, loans) => {
   }
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const buildAlertRecipients = (loan, adminEmails) => {
+  if (loan.responsibleEmail) {
+    return { to: [loan.responsibleEmail], cc: adminEmails.length > 0 ? adminEmails : undefined };
+  }
+  if (adminEmails.length > 0) {
+    return { to: adminEmails, cc: undefined };
+  }
+  return null;
+};
+
+const renderDevicesList = (devices) =>
+  (devices || []).map(d => `<li>${d.equipmentName} (${d.equipmentSerial})</li>`).join('');
+
+const buildPreDueEmailHtml = (loan, daysRemaining) => `
+  <!DOCTYPE html>
+  <html>
+    <body style="font-family: Arial, sans-serif; color: #1a1a1a;">
+      <h2 style="color: #2563eb;">Recordatorio: préstamo por vencer</h2>
+      <p>El préstamo del cliente <strong>${loan.client}</strong> (Partner: ${loan.partner}) vence en <strong>${daysRemaining} día(s)</strong>.</p>
+      <p><strong>Responsable:</strong> ${loan.responsible}</p>
+      <p><strong>Fecha de devolución:</strong> ${loan.returnDate}</p>
+      <p><strong>Equipos:</strong></p>
+      <ul>${renderDevicesList(loan.devices)}</ul>
+    </body>
+  </html>
+`;
+
+const buildOverdueEmailHtml = (loan, daysOverdue) => `
+  <!DOCTYPE html>
+  <html>
+    <body style="font-family: Arial, sans-serif; color: #1a1a1a;">
+      <h2 style="color: #dc2626;">Atención: préstamo atrasado</h2>
+      <p>El préstamo del cliente <strong>${loan.client}</strong> (Partner: ${loan.partner}) está atrasado por <strong>${daysOverdue} día(s)</strong>.</p>
+      <p><strong>Responsable:</strong> ${loan.responsible}</p>
+      <p><strong>Fecha de devolución esperada:</strong> ${loan.returnDate}</p>
+      <p><strong>Equipos:</strong></p>
+      <ul>${renderDevicesList(loan.devices)}</ul>
+    </body>
+  </html>
+`;
+
+const checkLoanAlerts = async () => {
+  const config = readAlertConfig();
+  if (!config.enabled) return;
+
+  const loans = readLoans();
+  const reportConfig = readReportConfig();
+  const adminEmails = (reportConfig && Array.isArray(reportConfig.emails)) ? reportConfig.emails : [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let changed = false;
+
+  for (const loan of loans) {
+    if (loan.status === 'devuelto') continue;
+    if (!loan.alertState) loan.alertState = { preDueSent: [], lastOverdueSentAt: null };
+
+    const returnDate = new Date(loan.returnDate);
+    returnDate.setHours(0, 0, 0, 0);
+    const diasRestantes = Math.round((returnDate - today) / DAY_MS);
+
+    if (diasRestantes < 0) {
+      if (loan.status !== 'atrasado') {
+        loan.status = 'atrasado';
+        changed = true;
+      }
+      const diasAtraso = Math.abs(diasRestantes);
+      const lastSent = loan.alertState.lastOverdueSentAt ? new Date(loan.alertState.lastOverdueSentAt) : null;
+      const dueForReminder = !lastSent || (today - lastSent) / DAY_MS >= config.overdueIntervalDays;
+
+      if (dueForReminder) {
+        const recipients = buildAlertRecipients(loan, adminEmails);
+        if (!recipients) {
+          console.warn(`Préstamo ${loan.id} atrasado sin destinatarios de alerta configurados`);
+        } else {
+          try {
+            await transporter.sendMail({
+              from: process.env.EMAIL_USER,
+              to: recipients.to.join(', '),
+              cc: recipients.cc ? recipients.cc.join(', ') : undefined,
+              subject: `Atención: préstamo de ${loan.client} está atrasado (${diasAtraso} días)`,
+              html: buildOverdueEmailHtml(loan, diasAtraso)
+            });
+            loan.alertState.lastOverdueSentAt = today.toISOString();
+            changed = true;
+          } catch (error) {
+            console.error(`Error enviando recordatorio de atraso para préstamo ${loan.id}:`, error.message);
+          }
+        }
+      }
+    } else if (config.preDueDays.includes(diasRestantes) && !loan.alertState.preDueSent.includes(diasRestantes)) {
+      const recipients = buildAlertRecipients(loan, adminEmails);
+      if (!recipients) {
+        console.warn(`Préstamo ${loan.id} sin destinatarios de alerta configurados`);
+      } else {
+        try {
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: recipients.to.join(', '),
+            cc: recipients.cc ? recipients.cc.join(', ') : undefined,
+            subject: `Recordatorio: préstamo de ${loan.client} vence en ${diasRestantes} día(s)`,
+            html: buildPreDueEmailHtml(loan, diasRestantes)
+          });
+          loan.alertState.preDueSent.push(diasRestantes);
+          changed = true;
+        } catch (error) {
+          console.error(`Error enviando aviso previo para préstamo ${loan.id}:`, error.message);
+        }
+      }
+    }
+  }
+
+  if (changed) saveLoans(loans);
+  config.lastRun = new Date().toISOString();
+  saveAlertConfig(config);
+};
+
 const validateLoanPayload = (body) => {
   const requiredStringFields = ['client', 'partner', 'responsible', 'loanDate', 'returnDate'];
   for (const field of requiredStringFields) {
@@ -1222,6 +1341,20 @@ app.post('/send-report', requireAdmin, async (req, res) => {
 let scheduledJob = null;
 let currentReportConfig = null; // Variable para mantener el estado actual
 
+let alertCronJob = null;
+
+const startAlertCron = () => {
+  if (alertCronJob) alertCronJob.stop();
+  alertCronJob = cron.schedule('0 9 * * *', () => { checkLoanAlerts(); });
+};
+
+const stopAlertCron = () => {
+  if (alertCronJob) {
+    alertCronJob.stop();
+    alertCronJob = null;
+  }
+};
+
 // Función para iniciar el cron job
 const startScheduledReport = (config) => {
   // Detener cualquier job anterior
@@ -1288,6 +1421,12 @@ app.put('/alert-config', requireAdmin, (req, res) => {
   config.overdueIntervalDays = overdueIntervalDays;
   saveAlertConfig(config);
 
+  if (config.enabled) {
+    startAlertCron();
+  } else {
+    stopAlertCron();
+  }
+
   res.json({ success: true, config });
 });
 
@@ -1347,6 +1486,13 @@ const savedConfig = readReportConfig();
 if (savedConfig && savedConfig.isScheduled) {
   console.log('Restaurando configuración de reportes guardada...');
   startScheduledReport(savedConfig);
+}
+
+// Restaurar configuración de alertas al iniciar
+const savedAlertConfig = readAlertConfig();
+if (savedAlertConfig.enabled) {
+  console.log('Restaurando configuración de alertas guardada...');
+  startAlertCron();
 }
 
 app.get('/', (req, res) => {
