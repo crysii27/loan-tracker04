@@ -688,7 +688,14 @@ const checkLoanAlerts = async () => {
     if (loan.status === 'devuelto') continue;
     if (!loan.alertState) loan.alertState = { preDueSent: [], lastOverdueSentAt: null };
 
-    const returnDate = parseLocalDate(loan.returnDate);
+    let returnDate;
+    try {
+      returnDate = parseLocalDate(loan.returnDate);
+      if (isNaN(returnDate.getTime())) throw new Error('returnDate inválida');
+    } catch (error) {
+      console.error(`Préstamo ${loan.id} tiene returnDate inválida ("${loan.returnDate}"), se omite de las alertas de este ciclo`);
+      continue;
+    }
     const diasRestantes = Math.round((returnDate - today) / DAY_MS);
 
     if (diasRestantes < 0) {
