@@ -623,6 +623,14 @@ const sendReportEmail = async (toEmails, loans) => {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// "YYYY-MM-DD" se interpreta como medianoche UTC; construirlo directo de los
+// componentes evita que .setHours() (que normaliza en hora local) lo recorra
+// un día hacia atrás en zonas horarias negativas (ej. Bogotá, UTC-5).
+const parseLocalDate = (dateStr) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const buildAlertRecipients = (loan, adminEmails) => {
   if (loan.responsibleEmail) {
     return { to: [loan.responsibleEmail], cc: adminEmails.length > 0 ? adminEmails : undefined };
@@ -680,8 +688,7 @@ const checkLoanAlerts = async () => {
     if (loan.status === 'devuelto') continue;
     if (!loan.alertState) loan.alertState = { preDueSent: [], lastOverdueSentAt: null };
 
-    const returnDate = new Date(loan.returnDate);
-    returnDate.setHours(0, 0, 0, 0);
+    const returnDate = parseLocalDate(loan.returnDate);
     const diasRestantes = Math.round((returnDate - today) / DAY_MS);
 
     if (diasRestantes < 0) {
