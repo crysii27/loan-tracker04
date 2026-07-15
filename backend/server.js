@@ -823,6 +823,11 @@ app.put('/loans/:id', requireAdmin, (req, res) => {
   } else if (merged.status !== 'devuelto') {
     merged.returnedAt = null;
   }
+  // Reabrir un préstamo devuelto reinicia su historial de alertas (evita que el próximo
+  // vencimiento herede envíos ya registrados de un ciclo de préstamo anterior)
+  if (loans[index].status === 'devuelto' && merged.status !== 'devuelto') {
+    merged.alertState = { preDueSent: [], lastOverdueSentAt: null };
+  }
   loans[index] = merged;
   saveLoans(loans);
   res.json(loans[index]);
