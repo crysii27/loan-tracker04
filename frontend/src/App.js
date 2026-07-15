@@ -32,6 +32,7 @@ function App() {
     client: '',
     partner: '',
     responsible: '',
+    responsibleEmail: '',
     loanDate: '',
     returnDate: '',
     comments: '',
@@ -344,6 +345,7 @@ function App() {
         client: '',
         partner: '',
         responsible: '',
+        responsibleEmail: '',
         loanDate: '',
         returnDate: '',
         comments: '',
@@ -361,6 +363,7 @@ function App() {
   const handleEdit = (loan) => {
     setFormData({
       ...loan,
+      responsibleEmail: loan.responsibleEmail || '',
       // Normaliza dispositivos guardados antes de que existieran "Dueño del equipo" / vínculo de inventario
       devices: (loan.devices && loan.devices.length > 0)
         ? loan.devices.map(device => ({ equipmentOwner: '', inventoryEquipmentId: null, ...device }))
@@ -784,6 +787,7 @@ function App() {
                     client: '',
                     partner: '',
                     responsible: '',
+                    responsibleEmail: '',
                     loanDate: '',
                     returnDate: '',
                     comments: '',
@@ -862,7 +866,17 @@ function App() {
                     required
                   />
                 </div>
-                <div></div>
+                <div>
+                  <label className={UI.label}>Correo del responsable (opcional)</label>
+                  <input
+                    type="email"
+                    name="responsibleEmail"
+                    value={formData.responsibleEmail}
+                    onChange={handleInputChange}
+                    placeholder="correo@empresa.com"
+                    className={UI.input}
+                  />
+                </div>
                 <div>
                   <label className={UI.label}>Fecha de préstamo</label>
                   <input
