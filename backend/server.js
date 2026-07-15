@@ -76,6 +76,33 @@ const saveReportConfig = (config) => {
   }
 };
 
+// Funciones para manejar configuración de alertas de vencimiento
+const ALERT_CONFIG_FILE = path.join(__dirname, 'alertConfig.json');
+
+const DEFAULT_ALERT_CONFIG = { enabled: false, preDueDays: [7, 3, 1], overdueIntervalDays: 3, lastRun: null };
+
+const readAlertConfig = () => {
+  try {
+    if (fs.existsSync(ALERT_CONFIG_FILE)) {
+      return { ...DEFAULT_ALERT_CONFIG, ...JSON.parse(fs.readFileSync(ALERT_CONFIG_FILE, 'utf8')) };
+    }
+    return { ...DEFAULT_ALERT_CONFIG };
+  } catch (error) {
+    console.error('Error leyendo configuración de alertas:', error);
+    return { ...DEFAULT_ALERT_CONFIG };
+  }
+};
+
+const saveAlertConfig = (config) => {
+  try {
+    fs.writeFileSync(ALERT_CONFIG_FILE, JSON.stringify(config, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error guardando configuración de alertas:', error);
+    return false;
+  }
+};
+
 // Configuración de Multer para guardar archivos
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -610,6 +637,11 @@ const validateLoanPayload = (body) => {
     }
     if (typeof device.equipmentSerial !== 'string' || device.equipmentSerial.trim() === '') {
       return { valid: false, error: 'Cada dispositivo debe tener un serial.' };
+    }
+  }
+  if (typeof body.responsibleEmail === 'string' && body.responsibleEmail.trim() !== '') {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.responsibleEmail.trim())) {
+      return { valid: false, error: 'El correo del responsable no parece válido.' };
     }
   }
   return { valid: true };
@@ -1236,6 +1268,28 @@ app.get('/report-config', requireAdmin, (req, res) => {
   }
 });
 
+app.get('/alert-config', requireAdmin, (req, res) => {
+  res.json(readAlertConfig());
+});
+
+app.put('/alert-config', requireAdmin, (req, res) => {
+  const { enabled, preDueDays, overdueIntervalDays } = req.body;
+
+  if (!Array.isArray(preDueDays) || preDueDays.length === 0 || preDueDays.some(d => !Number.isInteger(d) || d < 0)) {
+    return res.status(400).json({ error: 'preDueDays debe ser una lista de al menos un entero no negativo' });
+  }
+  if (!Number.isInteger(overdueIntervalDays) || overdueIntervalDays < 1) {
+    return res.status(400).json({ error: 'overdueIntervalDays debe ser un entero mayor o igual a 1' });
+  }
+
+  const config = readAlertConfig();
+  config.enabled = !!enabled;
+  config.preDueDays = preDueDays;
+  config.overdueIntervalDays = overdueIntervalDays;
+  saveAlertConfig(config);
+
+  res.json({ success: true, config });
+});
 
 // Ruta para configurar el envío automático de reportes
 
