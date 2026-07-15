@@ -1359,7 +1359,9 @@ let alertCronJob = null;
 
 const startAlertCron = () => {
   if (alertCronJob) alertCronJob.stop();
-  alertCronJob = cron.schedule('0 9 * * *', () => { checkLoanAlerts(); });
+  alertCronJob = cron.schedule('0 9 * * *', () => {
+    checkLoanAlerts().catch(error => console.error('Error en checkLoanAlerts:', error.message));
+  });
 };
 
 const stopAlertCron = () => {
