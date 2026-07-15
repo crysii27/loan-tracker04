@@ -76,6 +76,33 @@ const saveReportConfig = (config) => {
   }
 };
 
+// Funciones para manejar configuración de alertas de vencimiento
+const ALERT_CONFIG_FILE = path.join(__dirname, 'alertConfig.json');
+
+const DEFAULT_ALERT_CONFIG = { enabled: false, preDueDays: [7, 3, 1], overdueIntervalDays: 3, lastRun: null };
+
+const readAlertConfig = () => {
+  try {
+    if (fs.existsSync(ALERT_CONFIG_FILE)) {
+      return { ...DEFAULT_ALERT_CONFIG, ...JSON.parse(fs.readFileSync(ALERT_CONFIG_FILE, 'utf8')) };
+    }
+    return { ...DEFAULT_ALERT_CONFIG };
+  } catch (error) {
+    console.error('Error leyendo configuración de alertas:', error);
+    return { ...DEFAULT_ALERT_CONFIG };
+  }
+};
+
+const saveAlertConfig = (config) => {
+  try {
+    fs.writeFileSync(ALERT_CONFIG_FILE, JSON.stringify(config, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error guardando configuración de alertas:', error);
+    return false;
+  }
+};
+
 // Configuración de Multer para guardar archivos
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -594,6 +621,139 @@ const sendReportEmail = async (toEmails, loans) => {
   }
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// "YYYY-MM-DD" se interpreta como medianoche UTC; construirlo directo de los
+// componentes evita que .setHours() (que normaliza en hora local) lo recorra
+// un día hacia atrás en zonas horarias negativas (ej. Bogotá, UTC-5).
+const parseLocalDate = (dateStr) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const buildAlertRecipients = (loan, adminEmails) => {
+  if (loan.responsibleEmail) {
+    return { to: [loan.responsibleEmail], cc: adminEmails.length > 0 ? adminEmails : undefined };
+  }
+  if (adminEmails.length > 0) {
+    return { to: adminEmails, cc: undefined };
+  }
+  return null;
+};
+
+const renderDevicesList = (devices) =>
+  (devices || []).map(d => `<li>${d.equipmentName} (${d.equipmentSerial})</li>`).join('');
+
+const buildPreDueEmailHtml = (loan, daysRemaining) => `
+  <!DOCTYPE html>
+  <html>
+    <body style="font-family: Arial, sans-serif; color: #1a1a1a;">
+      <h2 style="color: #2563eb;">Recordatorio: préstamo por vencer</h2>
+      <p>El préstamo del cliente <strong>${loan.client}</strong> (Partner: ${loan.partner}) vence en <strong>${daysRemaining} día(s)</strong>.</p>
+      <p><strong>Responsable:</strong> ${loan.responsible}</p>
+      <p><strong>Fecha de devolución:</strong> ${loan.returnDate}</p>
+      <p><strong>Equipos:</strong></p>
+      <ul>${renderDevicesList(loan.devices)}</ul>
+    </body>
+  </html>
+`;
+
+const buildOverdueEmailHtml = (loan, daysOverdue) => `
+  <!DOCTYPE html>
+  <html>
+    <body style="font-family: Arial, sans-serif; color: #1a1a1a;">
+      <h2 style="color: #dc2626;">Atención: préstamo atrasado</h2>
+      <p>El préstamo del cliente <strong>${loan.client}</strong> (Partner: ${loan.partner}) está atrasado por <strong>${daysOverdue} día(s)</strong>.</p>
+      <p><strong>Responsable:</strong> ${loan.responsible}</p>
+      <p><strong>Fecha de devolución esperada:</strong> ${loan.returnDate}</p>
+      <p><strong>Equipos:</strong></p>
+      <ul>${renderDevicesList(loan.devices)}</ul>
+    </body>
+  </html>
+`;
+
+const checkLoanAlerts = async () => {
+  const config = readAlertConfig();
+  if (!config.enabled) return;
+
+  const loans = readLoans();
+  const reportConfig = readReportConfig();
+  const adminEmails = (reportConfig && Array.isArray(reportConfig.emails)) ? reportConfig.emails : [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let changed = false;
+
+  for (const loan of loans) {
+    if (loan.status === 'devuelto') continue;
+    if (!loan.alertState) loan.alertState = { preDueSent: [], lastOverdueSentAt: null };
+
+    let returnDate;
+    try {
+      returnDate = parseLocalDate(loan.returnDate);
+      if (isNaN(returnDate.getTime())) throw new Error('returnDate inválida');
+    } catch (error) {
+      console.error(`Préstamo ${loan.id} tiene returnDate inválida ("${loan.returnDate}"), se omite de las alertas de este ciclo`);
+      continue;
+    }
+    const diasRestantes = Math.round((returnDate - today) / DAY_MS);
+
+    if (diasRestantes < 0) {
+      if (loan.status !== 'atrasado') {
+        loan.status = 'atrasado';
+        changed = true;
+      }
+      const diasAtraso = Math.abs(diasRestantes);
+      const lastSent = loan.alertState.lastOverdueSentAt ? new Date(loan.alertState.lastOverdueSentAt) : null;
+      const dueForReminder = !lastSent || (today - lastSent) / DAY_MS >= config.overdueIntervalDays;
+
+      if (dueForReminder) {
+        const recipients = buildAlertRecipients(loan, adminEmails);
+        if (!recipients) {
+          console.warn(`Préstamo ${loan.id} atrasado sin destinatarios de alerta configurados`);
+        } else {
+          try {
+            await transporter.sendMail({
+              from: process.env.EMAIL_USER,
+              to: recipients.to.join(', '),
+              cc: recipients.cc ? recipients.cc.join(', ') : undefined,
+              subject: `Atención: préstamo de ${loan.client} está atrasado (${diasAtraso} días)`,
+              html: buildOverdueEmailHtml(loan, diasAtraso)
+            });
+            loan.alertState.lastOverdueSentAt = today.toISOString();
+            changed = true;
+          } catch (error) {
+            console.error(`Error enviando recordatorio de atraso para préstamo ${loan.id}:`, error.message);
+          }
+        }
+      }
+    } else if (config.preDueDays.includes(diasRestantes) && !loan.alertState.preDueSent.includes(diasRestantes)) {
+      const recipients = buildAlertRecipients(loan, adminEmails);
+      if (!recipients) {
+        console.warn(`Préstamo ${loan.id} sin destinatarios de alerta configurados`);
+      } else {
+        try {
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: recipients.to.join(', '),
+            cc: recipients.cc ? recipients.cc.join(', ') : undefined,
+            subject: `Recordatorio: préstamo de ${loan.client} vence en ${diasRestantes} día(s)`,
+            html: buildPreDueEmailHtml(loan, diasRestantes)
+          });
+          loan.alertState.preDueSent.push(diasRestantes);
+          changed = true;
+        } catch (error) {
+          console.error(`Error enviando aviso previo para préstamo ${loan.id}:`, error.message);
+        }
+      }
+    }
+  }
+
+  if (changed) saveLoans(loans);
+  config.lastRun = new Date().toISOString();
+  saveAlertConfig(config);
+};
+
 const validateLoanPayload = (body) => {
   const requiredStringFields = ['client', 'partner', 'responsible', 'loanDate', 'returnDate'];
   for (const field of requiredStringFields) {
@@ -610,6 +770,11 @@ const validateLoanPayload = (body) => {
     }
     if (typeof device.equipmentSerial !== 'string' || device.equipmentSerial.trim() === '') {
       return { valid: false, error: 'Cada dispositivo debe tener un serial.' };
+    }
+  }
+  if (typeof body.responsibleEmail === 'string' && body.responsibleEmail.trim() !== '') {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.responsibleEmail.trim())) {
+      return { valid: false, error: 'El correo del responsable no parece válido.' };
     }
   }
   return { valid: true };
@@ -657,6 +822,11 @@ app.put('/loans/:id', requireAdmin, (req, res) => {
     merged.returnedAt = new Date().toISOString();
   } else if (merged.status !== 'devuelto') {
     merged.returnedAt = null;
+  }
+  // Reabrir un préstamo devuelto reinicia su historial de alertas (evita que el próximo
+  // vencimiento herede envíos ya registrados de un ciclo de préstamo anterior)
+  if (loans[index].status === 'devuelto' && merged.status !== 'devuelto') {
+    merged.alertState = { preDueSent: [], lastOverdueSentAt: null };
   }
   loans[index] = merged;
   saveLoans(loans);
@@ -1190,6 +1360,22 @@ app.post('/send-report', requireAdmin, async (req, res) => {
 let scheduledJob = null;
 let currentReportConfig = null; // Variable para mantener el estado actual
 
+let alertCronJob = null;
+
+const startAlertCron = () => {
+  if (alertCronJob) alertCronJob.stop();
+  alertCronJob = cron.schedule('0 9 * * *', () => {
+    checkLoanAlerts().catch(error => console.error('Error en checkLoanAlerts:', error.message));
+  });
+};
+
+const stopAlertCron = () => {
+  if (alertCronJob) {
+    alertCronJob.stop();
+    alertCronJob = null;
+  }
+};
+
 // Función para iniciar el cron job
 const startScheduledReport = (config) => {
   // Detener cualquier job anterior
@@ -1236,6 +1422,34 @@ app.get('/report-config', requireAdmin, (req, res) => {
   }
 });
 
+app.get('/alert-config', requireAdmin, (req, res) => {
+  res.json(readAlertConfig());
+});
+
+app.put('/alert-config', requireAdmin, (req, res) => {
+  const { enabled, preDueDays, overdueIntervalDays } = req.body;
+
+  if (!Array.isArray(preDueDays) || preDueDays.length === 0 || preDueDays.some(d => !Number.isInteger(d) || d < 0)) {
+    return res.status(400).json({ error: 'preDueDays debe ser una lista de al menos un entero no negativo' });
+  }
+  if (!Number.isInteger(overdueIntervalDays) || overdueIntervalDays < 1) {
+    return res.status(400).json({ error: 'overdueIntervalDays debe ser un entero mayor o igual a 1' });
+  }
+
+  const config = readAlertConfig();
+  config.enabled = !!enabled;
+  config.preDueDays = preDueDays;
+  config.overdueIntervalDays = overdueIntervalDays;
+  saveAlertConfig(config);
+
+  if (config.enabled) {
+    startAlertCron();
+  } else {
+    stopAlertCron();
+  }
+
+  res.json({ success: true, config });
+});
 
 // Ruta para configurar el envío automático de reportes
 
@@ -1293,6 +1507,13 @@ const savedConfig = readReportConfig();
 if (savedConfig && savedConfig.isScheduled) {
   console.log('Restaurando configuración de reportes guardada...');
   startScheduledReport(savedConfig);
+}
+
+// Restaurar configuración de alertas al iniciar
+const savedAlertConfig = readAlertConfig();
+if (savedAlertConfig.enabled) {
+  console.log('Restaurando configuración de alertas guardada...');
+  startAlertCron();
 }
 
 app.get('/', (req, res) => {

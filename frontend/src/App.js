@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiHardDrive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp, FiLock, FiSliders, FiX } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiPaperclip, FiSearch, FiFileText, FiArchive, FiHardDrive, FiDownload, FiMail, FiSettings, FiChevronDown, FiChevronUp, FiLock, FiSliders, FiX, FiBell } from 'react-icons/fi';
 import { API_URL, apiFetch, getToken, clearToken, setSessionExpiredHandler, downloadFile } from './api';
 import LoginModal from './LoginModal';
 import AdminPanel from './AdminPanel';
@@ -32,6 +32,7 @@ function App() {
     client: '',
     partner: '',
     responsible: '',
+    responsibleEmail: '',
     loanDate: '',
     returnDate: '',
     comments: '',
@@ -54,6 +55,16 @@ function App() {
   });
   const [emailInput, setEmailInput] = useState('');
   const [emailInputError, setEmailInputError] = useState('');
+
+  const [alertConfig, setAlertConfig] = useState({
+    enabled: false,
+    preDueDays: [7, 3, 1],
+    overdueIntervalDays: 3,
+    lastRun: null
+  });
+  const [showAlertConfig, setShowAlertConfig] = useState(false);
+  const [preDueDayInput, setPreDueDayInput] = useState('');
+  const [preDueDayInputError, setPreDueDayInputError] = useState('');
 
   const [reportFilters, setReportFilters] = useState({
     loanDateFrom: '',
@@ -178,6 +189,22 @@ function App() {
       }
     };
     fetchReportConfig();
+  }, [isAdmin]);
+
+  // Cargar configuración de alertas (solo admin)
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchAlertConfig = async () => {
+      try {
+        const response = await apiFetch('/alert-config');
+        if (!response.ok) return;
+        const config = await response.json();
+        setAlertConfig(config);
+      } catch (error) {
+        console.error('Error cargando configuración de alertas:', error);
+      }
+    };
+    fetchAlertConfig();
   }, [isAdmin]);
 
 
@@ -344,6 +371,7 @@ function App() {
         client: '',
         partner: '',
         responsible: '',
+        responsibleEmail: '',
         loanDate: '',
         returnDate: '',
         comments: '',
@@ -361,6 +389,7 @@ function App() {
   const handleEdit = (loan) => {
     setFormData({
       ...loan,
+      responsibleEmail: loan.responsibleEmail || '',
       // Normaliza dispositivos guardados antes de que existieran "Dueño del equipo" / vínculo de inventario
       devices: (loan.devices && loan.devices.length > 0)
         ? loan.devices.map(device => ({ equipmentOwner: '', inventoryEquipmentId: null, ...device }))
@@ -475,6 +504,64 @@ function App() {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       addEmailRecipient();
+    }
+  };
+
+  const addPreDueDay = () => {
+    const value = parseInt(preDueDayInput, 10);
+    if (isNaN(value) || value < 0) {
+      setPreDueDayInputError('Ingresa un número de días válido (0 o más)');
+      return;
+    }
+    if (alertConfig.preDueDays.includes(value)) {
+      setPreDueDayInputError('Ese número de días ya está en la lista');
+      return;
+    }
+    setAlertConfig({ ...alertConfig, preDueDays: [...alertConfig.preDueDays, value].sort((a, b) => b - a) });
+    setPreDueDayInput('');
+    setPreDueDayInputError('');
+  };
+
+  const removePreDueDay = (day) => {
+    setAlertConfig({ ...alertConfig, preDueDays: alertConfig.preDueDays.filter(d => d !== day) });
+  };
+
+  const handlePreDueDayKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addPreDueDay();
+    }
+  };
+
+  const handleOverdueIntervalChange = (e) => {
+    setAlertConfig({ ...alertConfig, overdueIntervalDays: Math.max(1, parseInt(e.target.value, 10) || 1) });
+  };
+
+  const handleSaveAlertConfig = async () => {
+    if (alertConfig.preDueDays.length === 0) {
+      alert('Agrega al menos un valor de días antes del vencimiento, o desactiva las alertas');
+      return;
+    }
+    try {
+      const response = await apiFetch('/alert-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: alertConfig.enabled,
+          preDueDays: alertConfig.preDueDays,
+          overdueIntervalDays: alertConfig.overdueIntervalDays
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setAlertConfig(data.config);
+        alert('Configuración de alertas guardada');
+      } else {
+        alert(`Error al guardar la configuración: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error en la conexión:', error);
+      alert('Error en la conexión con el servidor. Verifica que el backend esté en ejecución.');
     }
   };
 
@@ -784,6 +871,7 @@ function App() {
                     client: '',
                     partner: '',
                     responsible: '',
+                    responsibleEmail: '',
                     loanDate: '',
                     returnDate: '',
                     comments: '',
@@ -801,6 +889,12 @@ function App() {
                 className={UI.btnSecondary}
               >
                 <FiSettings className="text-base" /> Configurar Reportes
+              </button>
+              <button
+                onClick={() => setShowAlertConfig(true)}
+                className={UI.btnSecondary}
+              >
+                <FiBell className="text-base" /> Alertas de Vencimiento
               </button>
               <button
                 onClick={() => setShowAdminPanel(true)}
@@ -862,7 +956,17 @@ function App() {
                     required
                   />
                 </div>
-                <div></div>
+                <div>
+                  <label className={UI.label}>Correo del responsable (opcional)</label>
+                  <input
+                    type="email"
+                    name="responsibleEmail"
+                    value={formData.responsibleEmail}
+                    onChange={handleInputChange}
+                    placeholder="correo@empresa.com"
+                    className={UI.input}
+                  />
+                </div>
                 <div>
                   <label className={UI.label}>Fecha de préstamo</label>
                   <input
@@ -1082,6 +1186,92 @@ function App() {
                     Detener Envío Automático
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showAlertConfig && (
+          <div className={UI.panel}>
+            <h2 className="font-display text-xl font-bold text-ink mb-6">Alertas de Vencimiento</h2>
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="alertsEnabled"
+                  checked={alertConfig.enabled}
+                  onChange={(e) => setAlertConfig({ ...alertConfig, enabled: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="alertsEnabled" className="text-sm text-ink">Activar alertas automáticas por correo</label>
+              </div>
+              <div>
+                <label className={UI.label}>Avisar N días antes del vencimiento</label>
+                <div className="flex gap-3">
+                  <input
+                    type="number"
+                    min="0"
+                    value={preDueDayInput}
+                    onChange={(e) => { setPreDueDayInput(e.target.value); setPreDueDayInputError(''); }}
+                    onKeyDown={handlePreDueDayKeyDown}
+                    placeholder="Ej: 3 — Enter para agregar"
+                    className={UI.input}
+                  />
+                  <button type="button" onClick={addPreDueDay} className={UI.btnSecondary}>
+                    <FiPlus className="text-sm" /> Agregar
+                  </button>
+                </div>
+                {preDueDayInputError && (
+                  <p className="text-xs font-medium text-signal-red mt-1.5">{preDueDayInputError}</p>
+                )}
+                {alertConfig.preDueDays.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {alertConfig.preDueDays.map(day => (
+                      <span key={day} className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-paper border border-line text-sm text-ink">
+                        {day} día(s) antes
+                        <button
+                          type="button"
+                          onClick={() => removePreDueDay(day)}
+                          className="text-ink-muted hover:text-signal-red rounded-full p-0.5"
+                          title={`Quitar ${day}`}
+                        >
+                          <FiX className="text-xs" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-ink-muted mt-2">Agrega al menos un umbral de días antes del vencimiento.</p>
+                )}
+              </div>
+              <div>
+                <label className={UI.label}>Repetir recordatorio de atraso cada (días)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={alertConfig.overdueIntervalDays}
+                  onChange={handleOverdueIntervalChange}
+                  className={UI.input}
+                />
+              </div>
+              {alertConfig.lastRun && (
+                <p className="text-xs text-ink-muted">Última ejecución: {new Date(alertConfig.lastRun).toLocaleString()}</p>
+              )}
+              <div className="flex flex-wrap justify-end gap-3 pt-6 mt-2 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setShowAlertConfig(false)}
+                  className={UI.btnSecondary}
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAlertConfig}
+                  className={UI.btnPrimary}
+                >
+                  Guardar Configuración
+                </button>
               </div>
             </div>
           </div>
